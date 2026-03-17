@@ -94,7 +94,8 @@ function getActiveSlots(screenDir) {
     return fs.readdirSync(screenDir, { withFileTypes: true })
       .filter(e => e.isDirectory() && e.name.startsWith('slot-'))
       .map(e => e.name.replace(/^slot-/, ''))
-      .filter(id => fs.existsSync(path.join(screenDir, `slot-${id}`, 'current.html')));
+      .filter(id => fs.existsSync(path.join(screenDir, `slot-${id}`, 'current.html')))
+      .map(id => id.toLowerCase());
   } catch { return []; }
 }
 
@@ -231,8 +232,8 @@ function startServer(config = {}) {
       return;
     }
 
-    if (req.method === 'GET' && urlPath.match(/^\/slot\/[a-z0-9]$/)) {
-      const slotId = urlPath.split('/')[2];
+    if (req.method === 'GET' && urlPath.match(/^\/slot\/[a-zA-Z0-9]+$/)) {
+      const slotId = urlPath.split('/')[2].toLowerCase();
       const slotFile = path.join(screenDir, `slot-${slotId}`, 'current.html');
       if (!fs.existsSync(slotFile)) {
         res.writeHead(404);

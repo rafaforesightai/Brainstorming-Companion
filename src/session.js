@@ -82,7 +82,7 @@ class SessionManager {
 
     let filePath;
     if (slot !== undefined) {
-      const slotDir = path.join(sessionDir, `slot-${slot}`);
+      const slotDir = path.join(sessionDir, `slot-${slot.toLowerCase()}`);
       fs.mkdirSync(slotDir, { recursive: true });
       filePath = path.join(slotDir, 'current.html');
       if (label !== undefined) {
@@ -127,7 +127,7 @@ class SessionManager {
   clearSlot(slot) {
     const active = this.getActive();
     if (!active) return;
-    const slotFile = path.join(active.sessionDir, `slot-${slot}`, 'current.html');
+    const slotFile = path.join(active.sessionDir, `slot-${slot.toLowerCase()}`, 'current.html');
     try {
       fs.rmSync(slotFile);
     } catch {
