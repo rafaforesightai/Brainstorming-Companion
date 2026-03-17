@@ -45,25 +45,28 @@ class SessionManager {
 
     for (const { name: sessionId, sessionDir } of sessions) {
       const serverInfoPath = path.join(sessionDir, '.server-info');
-      let serverInfo = null;
+      if (!fs.existsSync(serverInfoPath)) continue;
 
-      if (fs.existsSync(serverInfoPath)) {
+      let serverInfo;
+      try {
+        const raw = fs.readFileSync(serverInfoPath, 'utf8');
+        serverInfo = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+
+      // Verify server PID is alive
+      const pid = serverInfo.pid || serverInfo.serverPid;
+      if (pid) {
         try {
-          const raw = fs.readFileSync(serverInfoPath, 'utf8');
-          serverInfo = JSON.parse(raw);
+          process.kill(pid, 0);
         } catch {
+          // PID is dead — stale session
           continue;
         }
-
-        // Verify PID is alive
-        if (serverInfo && serverInfo.pid) {
-          try {
-            process.kill(serverInfo.pid, 0);
-          } catch {
-            // PID is dead — stale session
-            continue;
-          }
-        }
+      } else {
+        // No PID in server-info — can't verify, skip
+        continue;
       }
 
       return { sessionId, sessionDir, serverInfo };
