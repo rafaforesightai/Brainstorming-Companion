@@ -14,12 +14,19 @@
     "comparison",
     "design"
   ],
-  "repository": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafaforesightai/Brainstorming-Companion.git"
+  },
+  "homepage": "https://github.com/rafaforesightai/Brainstorming-Companion#readme",
+  "bugs": {
+    "url": "https://github.com/rafaforesightai/Brainstorming-Companion/issues"
+  },
   "engines": {
     "node": ">=18"
   },
   "bin": {
-    "brainstorm-companion": "./bin/brainstorm.js"
+    "brainstorm-companion": "bin/brainstorm.js"
   },
   "scripts": {
     "test": "node --test 'test/**/*.test.js'"
