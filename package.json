@@ -3,6 +3,18 @@
   "version": "1.0.0",
   "description": "AI-assisted visual brainstorming companion",
   "type": "commonjs",
+  "license": "MIT",
+  "keywords": [
+    "brainstorm",
+    "visual",
+    "mcp",
+    "claude",
+    "ai",
+    "prototyping",
+    "comparison",
+    "design"
+  ],
+  "repository": {},
   "engines": {
     "node": ">=18"
   },
