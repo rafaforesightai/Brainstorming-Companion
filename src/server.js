@@ -5,6 +5,7 @@ const http = require('node:http');
 const path = require('node:path');
 
 const { OPCODES, computeAcceptKey, encodeFrame, decodeFrame } = require('./ws-protocol');
+const { detectLibraries, buildInjections } = require('./content-detect');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,6 +34,10 @@ const frameTemplate = fs.readFileSync(path.join(__dirname, 'templates', 'frame.h
 const helperScript = fs.readFileSync(path.join(__dirname, 'templates', 'helper.js'), 'utf-8');
 const waitingPage = fs.readFileSync(path.join(__dirname, 'templates', 'waiting.html'), 'utf-8');
 const helperInjection = '<script>\n' + helperScript + '\n</script>';
+
+const comparisonTemplate = fs.readFileSync(path.join(__dirname, 'templates', 'comparison.html'), 'utf-8');
+const comparisonHelperScript = fs.readFileSync(path.join(__dirname, 'templates', 'comparison-helper.js'), 'utf-8');
+const comparisonHelperInjection = '<script>\n' + comparisonHelperScript + '\n</script>';
 
 // ---------------------------------------------------------------------------
 // Helper functions
@@ -82,6 +87,15 @@ function injectHelper(html) {
     return html.replace('</body>', helperInjection + '\n</body>');
   }
   return html + helperInjection;
+}
+
+function getActiveSlots(screenDir) {
+  try {
+    return fs.readdirSync(screenDir, { withFileTypes: true })
+      .filter(e => e.isDirectory() && e.name.startsWith('slot-'))
+      .map(e => e.name.replace(/^slot-/, ''))
+      .filter(id => fs.existsSync(path.join(screenDir, `slot-${id}`, 'current.html')));
+  } catch { return []; }
 }
 
 // ---------------------------------------------------------------------------
@@ -180,14 +194,57 @@ function startServer(config = {}) {
   function handleRequest(req, res) {
     touchActivity();
 
-    if (req.method === 'GET' && req.url === '/') {
-      const screenFile = getNewestScreen(screenDir);
-      let html;
-      if (screenFile) {
-        const raw = fs.readFileSync(screenFile, 'utf-8');
-        html = isFullDocument(raw) ? raw : wrapInFrame(raw);
+    // Strip query string for routing
+    const urlPath = req.url.split('?')[0];
+
+    if (req.method === 'GET' && urlPath === '/') {
+      const slots = getActiveSlots(screenDir);
+      if (slots.length > 0) {
+        // Comparison mode
+        let html = comparisonTemplate;
+        if (html.includes('</body>')) {
+          html = html.replace('</body>', comparisonHelperInjection + '\n</body>');
+        } else {
+          html = html + comparisonHelperInjection;
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
       } else {
-        html = waitingPage;
+        // Single screen mode
+        const screenFile = getNewestScreen(screenDir);
+        let html;
+        if (screenFile) {
+          const raw = fs.readFileSync(screenFile, 'utf-8');
+          html = isFullDocument(raw) ? raw : wrapInFrame(raw);
+        } else {
+          html = waitingPage;
+        }
+        const needs = detectLibraries(html);
+        const cdnTags = buildInjections(needs);
+        if (cdnTags && html.includes('</head>')) {
+          html = html.replace('</head>', cdnTags + '\n</head>');
+        }
+        html = injectHelper(html);
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      }
+      return;
+    }
+
+    if (req.method === 'GET' && urlPath.match(/^\/slot\/[a-z0-9]$/)) {
+      const slotId = urlPath.split('/')[2];
+      const slotFile = path.join(screenDir, `slot-${slotId}`, 'current.html');
+      if (!fs.existsSync(slotFile)) {
+        res.writeHead(404);
+        res.end('Slot not found');
+        return;
+      }
+      const raw = fs.readFileSync(slotFile, 'utf-8');
+      let html = isFullDocument(raw) ? raw : wrapInFrame(raw);
+      const slotNeeds = detectLibraries(html);
+      const slotCdnTags = buildInjections(slotNeeds);
+      if (slotCdnTags && html.includes('</head>')) {
+        html = html.replace('</head>', slotCdnTags + '\n</head>');
       }
       html = injectHelper(html);
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -195,8 +252,31 @@ function startServer(config = {}) {
       return;
     }
 
+    if (req.method === 'GET' && urlPath === '/api/status') {
+      const slots = getActiveSlots(screenDir);
+      const slotInfo = slots.map(id => {
+        const labelPath = path.join(screenDir, `slot-${id}`, '.label');
+        let label = null;
+        try { label = fs.readFileSync(labelPath, 'utf8').trim(); } catch {}
+        return { id, label };
+      });
+      const eventsFile = path.join(screenDir, '.events');
+      let eventCount = 0;
+      try {
+        const raw = fs.readFileSync(eventsFile, 'utf8');
+        eventCount = raw.split('\n').filter(l => l.trim()).length;
+      } catch {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        mode: slots.length > 0 ? 'comparison' : 'single',
+        slots: slotInfo,
+        eventCount,
+      }));
+      return;
+    }
+
     if (req.method === 'GET' && req.url.startsWith('/files/')) {
-      const fileName = req.url.slice(7);
+      const fileName = req.url.slice(7).split('?')[0];
       const filePath = path.join(screenDir, path.basename(fileName));
       if (!fs.existsSync(filePath)) {
         res.writeHead(404);
@@ -314,10 +394,16 @@ function startServer(config = {}) {
     // Clear timers
     if (idleTimer) clearTimeout(idleTimer);
     if (ownerCheckTimer) clearInterval(ownerCheckTimer);
+    if (slotPollTimer) clearInterval(slotPollTimer);
 
     // Close watcher
     if (watcher) {
       try { watcher.close(); } catch { /* ignore */ }
+    }
+
+    // Close slot watchers
+    for (const sw of slotWatchers.values()) {
+      try { sw.close(); } catch { /* ignore */ }
     }
 
     // Close all client sockets
@@ -341,9 +427,57 @@ function startServer(config = {}) {
       .filter(f => f.endsWith('.html') && !f.startsWith('.'))
   );
 
+  // Track per-slot watchers so we don't double-watch
+  const slotWatchers = new Map();
+
+  function watchSlotDir(slotId) {
+    if (slotWatchers.has(slotId)) return;
+    const slotDir = path.join(screenDir, `slot-${slotId}`);
+    try {
+      const sw = fs.watch(slotDir, (eventType, filename) => {
+        if (!filename) return;
+        const key = `slot-${slotId}-${filename}`;
+        if (debounceTimers.has(key)) clearTimeout(debounceTimers.get(key));
+        debounceTimers.set(key, setTimeout(() => {
+          debounceTimers.delete(key);
+          touchActivity();
+          logFn(JSON.stringify({ type: 'slot-updated', slot: slotId, file: filename }));
+          broadcast({ type: 'slot-content', slot: slotId });
+        }, 100));
+      });
+      sw.on('error', () => { slotWatchers.delete(slotId); });
+      slotWatchers.set(slotId, sw);
+      logFn(JSON.stringify({ type: 'slot-watcher-started', slot: slotId }));
+    } catch {
+      // slot dir may not exist yet; polling will catch it
+    }
+  }
+
+  // Start watchers for any slots that already exist
+  getActiveSlots(screenDir).forEach(id => watchSlotDir(id));
+
   try {
     watcher = fs.watch(screenDir, (eventType, filename) => {
-      if (!filename || !filename.endsWith('.html') || filename.startsWith('.')) return;
+      if (!filename) return;
+
+      // Detect new slot-* directories
+      if (filename.startsWith('slot-')) {
+        const slotId = filename.replace(/^slot-/, '');
+        if (!slotWatchers.has(slotId)) {
+          // Give it a moment to settle before starting the watcher
+          setTimeout(() => {
+            const slotDir = path.join(screenDir, filename);
+            if (fs.existsSync(slotDir)) {
+              watchSlotDir(slotId);
+              const activeSlots = getActiveSlots(screenDir);
+              broadcast({ type: 'slots-update', slots: activeSlots });
+            }
+          }, 200);
+        }
+        return;
+      }
+
+      if (!filename.endsWith('.html') || filename.startsWith('.')) return;
 
       if (debounceTimers.has(filename)) clearTimeout(debounceTimers.get(filename));
 
@@ -376,6 +510,25 @@ function startServer(config = {}) {
   } catch (err) {
     logFn(JSON.stringify({ type: 'watcher-start-error', error: String(err) }));
   }
+
+  // Fallback: poll root directory every 2s for new slot-* dirs (macOS fs.watch quirk)
+  const knownSlotIds = new Set(getActiveSlots(screenDir));
+  const slotPollTimer = setInterval(() => {
+    const currentSlots = getActiveSlots(screenDir);
+    let changed = false;
+    currentSlots.forEach(id => {
+      if (!knownSlotIds.has(id)) {
+        knownSlotIds.add(id);
+        watchSlotDir(id);
+        changed = true;
+        logFn(JSON.stringify({ type: 'slot-detected-poll', slot: id }));
+      }
+    });
+    if (changed) {
+      broadcast({ type: 'slots-update', slots: currentSlots });
+    }
+  }, 2000);
+  if (slotPollTimer.unref) slotPollTimer.unref();
 
   // -------------------------------------------------------------------------
   // Owner PID monitoring
