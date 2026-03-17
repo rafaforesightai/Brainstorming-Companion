@@ -6,11 +6,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { SessionManager } = require('./session');
 
-// MCP mode check (early exit)
-if (process.argv.includes('--mcp')) {
-  console.error('MCP mode not yet implemented');
-  process.exit(1);
-}
 
 // ---------------------------------------------------------------------------
 // Usage
@@ -438,4 +433,9 @@ function main() {
   }
 }
 
-main();
+if (!process.argv.includes('--mcp')) {
+  main();
+} else {
+  const { McpServer } = require('./mcp');
+  new McpServer().start();
+}
