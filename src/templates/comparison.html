@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Brainstorm Companion — Compare</title>
+  <style>
+    :root {
+      --bg-primary: #0f1117;
+      --bg-secondary: #1a1d2e;
+      --bg-tertiary: #252840;
+      --accent-primary: #6c63ff;
+      --accent-secondary: #ff6584;
+      --accent-tertiary: #43e97b;
+      --text-primary: #e8eaf6;
+      --text-secondary: #9fa8da;
+      --text-muted: #5c6bc0;
+      --border-color: #2d3561;
+      --shadow: 0 4px 20px rgba(0,0,0,0.4);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+
+    .header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .view-controls {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .view-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 0.3rem 0.75rem;
+      transition: all 0.15s ease;
+    }
+
+    .view-btn:hover {
+      border-color: var(--accent-primary);
+      color: var(--text-primary);
+    }
+
+    .view-btn.active {
+      background: rgba(108, 99, 255, 0.15);
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    .status {
+      font-size: 0.75rem;
+      color: var(--accent-tertiary);
+      background: rgba(67, 233, 123, 0.1);
+      border: 1px solid rgba(67, 233, 123, 0.2);
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+    }
+
+    /* Tab bar */
+    .tab-bar {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      gap: 0;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+
+    .tab {
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.75rem 1.5rem;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tab:hover {
+      color: var(--text-primary);
+      background: rgba(108, 99, 255, 0.05);
+    }
+
+    .tab.active {
+      border-bottom-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    .tab .slot-letter {
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .tab .slot-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .tab.active .slot-label {
+      color: var(--text-secondary);
+    }
+
+    /* Panels container */
+    .panels {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-color);
+      min-width: 0;
+    }
+
+    .panel:last-child {
+      border-right: none;
+    }
+
+    .panel.hidden {
+      display: none;
+    }
+
+    .panel-header {
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.4rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      flex-shrink: 0;
+    }
+
+    .panel iframe {
+      border: none;
+      width: 100%;
+      flex: 1;
+      display: block;
+      min-height: 0;
+    }
+
+    /* Preference bar */
+    .preference-bar {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: 0.6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .preference-bar span {
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .pref-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.35rem 1rem;
+      transition: all 0.15s ease;
+    }
+
+    .pref-btn:hover {
+      border-color: var(--accent-tertiary);
+      color: var(--accent-tertiary);
+    }
+
+    .pref-btn.selected {
+      background: rgba(67, 233, 123, 0.12);
+      border-color: var(--accent-tertiary);
+      color: var(--accent-tertiary);
+    }
+
+    .pref-result {
+      margin-left: auto;
+      font-size: 0.8rem;
+      color: var(--accent-tertiary);
+      font-weight: 500;
+    }
+
+    .keyboard-hint {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    kbd {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.7rem;
+      padding: 0.1rem 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Brainstorm Companion</h1>
+    <div class="view-controls">
+      <button class="view-btn active" data-view="side-by-side">Side by Side</button>
+      <button class="view-btn" data-view="single">Single</button>
+    </div>
+    <div class="status" id="status">Connected</div>
+  </div>
+
+  <div class="tab-bar" id="tab-bar">
+    <!-- Tabs populated by JS -->
+  </div>
+
+  <div class="panels" id="panels">
+    <!-- Iframes populated by JS -->
+  </div>
+
+  <div class="preference-bar" id="preference-bar">
+    <span>Preferred:</span>
+    <!-- Preference buttons populated by JS -->
+    <div class="keyboard-hint">
+      <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> switch slots &nbsp;
+      <kbd>Tab</kbd> toggle view
+    </div>
+  </div>
+</body>
+</html>
