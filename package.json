@@ -1,0 +1,20 @@
+{
+  "name": "brainstorm-companion",
+  "version": "1.0.0",
+  "description": "AI-assisted visual brainstorming companion",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "brainstorm-companion": "./bin/brainstorm.js"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "skill/"
+  ]
+}
