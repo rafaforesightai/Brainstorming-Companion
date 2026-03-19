@@ -240,7 +240,7 @@ class McpServer {
 
     let filePath;
     if (slot !== undefined) {
-      const slotDir = path.join(this.sessionDir, `slot-${slot}`);
+      const slotDir = path.join(this.sessionDir, `slot-${slot.toLowerCase()}`);
       fs.mkdirSync(slotDir, { recursive: true });
       filePath = path.join(slotDir, 'current.html');
       if (label !== undefined) {
@@ -284,7 +284,7 @@ class McpServer {
     }
     const { slot } = args;
     if (slot) {
-      const slotFile = path.join(this.sessionDir, `slot-${slot}`, 'current.html');
+      const slotFile = path.join(this.sessionDir, `slot-${slot.toLowerCase()}`, 'current.html');
       try { fs.rmSync(slotFile); } catch { /* ignore if not found */ }
     } else {
       // Clear all top-level html files and slot current.html files

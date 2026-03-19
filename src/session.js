@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 class SessionManager {
-  constructor(projectDir) {
+  constructor(projectDir, targetSessionId) {
     this.baseDir = projectDir
       ? `${projectDir}/.superpowers/brainstorm/`
       : `/tmp/brainstorm-companion/`;
+    this.targetSessionId = targetSessionId || null;
   }
 
   create() {
@@ -17,9 +18,32 @@ class SessionManager {
     return { sessionId, sessionDir };
   }
 
-  getActive() {
+  getActive(targetSessionId) {
     if (!fs.existsSync(this.baseDir)) return null;
 
+    // If a specific session ID is requested, go directly to it
+    if (targetSessionId) {
+      const sessionDir = path.join(this.baseDir, targetSessionId);
+      if (!fs.existsSync(sessionDir)) return null;
+      const serverInfoPath = path.join(sessionDir, '.server-info');
+      if (!fs.existsSync(serverInfoPath)) return null;
+      let serverInfo;
+      try {
+        const raw = fs.readFileSync(serverInfoPath, 'utf8');
+        serverInfo = JSON.parse(raw);
+      } catch {
+        return null;
+      }
+      const pid = serverInfo.pid || serverInfo.serverPid;
+      if (pid) {
+        try { process.kill(pid, 0); } catch { return null; }
+      } else {
+        return null;
+      }
+      return { sessionId: targetSessionId, sessionDir, serverInfo };
+    }
+
+    // No specific session — find most recent with live PID
     let entries;
     try {
       entries = fs.readdirSync(this.baseDir, { withFileTypes: true });
@@ -27,7 +51,6 @@ class SessionManager {
       return null;
     }
 
-    // Collect session dirs with their mtime for sorting (most recent first)
     const sessions = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
@@ -55,17 +78,14 @@ class SessionManager {
         continue;
       }
 
-      // Verify server PID is alive
       const pid = serverInfo.pid || serverInfo.serverPid;
       if (pid) {
         try {
           process.kill(pid, 0);
         } catch {
-          // PID is dead — stale session
           continue;
         }
       } else {
-        // No PID in server-info — can't verify, skip
         continue;
       }
 
@@ -76,7 +96,7 @@ class SessionManager {
   }
 
   pushScreen(html, { slot, filename, label } = {}) {
-    const active = this.getActive();
+    const active = this.getActive(this.targetSessionId);
     if (!active) throw new Error('No active session found');
     const { sessionDir } = active;
 
@@ -97,7 +117,7 @@ class SessionManager {
   }
 
   readEvents() {
-    const active = this.getActive();
+    const active = this.getActive(this.targetSessionId);
     if (!active) return [];
     const eventsPath = path.join(active.sessionDir, '.events');
     if (!fs.existsSync(eventsPath)) return [];
@@ -114,7 +134,7 @@ class SessionManager {
   }
 
   clearEvents() {
-    const active = this.getActive();
+    const active = this.getActive(this.targetSessionId);
     if (!active) return;
     const eventsPath = path.join(active.sessionDir, '.events');
     try {
@@ -125,7 +145,7 @@ class SessionManager {
   }
 
   clearSlot(slot) {
-    const active = this.getActive();
+    const active = this.getActive(this.targetSessionId);
     if (!active) return;
     const slotFile = path.join(active.sessionDir, `slot-${slot.toLowerCase()}`, 'current.html');
     try {
@@ -136,7 +156,7 @@ class SessionManager {
   }
 
   clearAll() {
-    const active = this.getActive();
+    const active = this.getActive(this.targetSessionId);
     if (!active) return;
     const { sessionDir } = active;
 
@@ -163,7 +183,7 @@ class SessionManager {
   }
 
   getStatus() {
-    const active = this.getActive();
+    const active = this.getActive(this.targetSessionId);
     if (!active) return null;
     const { sessionId, sessionDir, serverInfo } = active;
 
@@ -202,7 +222,7 @@ class SessionManager {
   }
 
   cleanup() {
-    const active = this.getActive();
+    const active = this.getActive(this.targetSessionId);
     if (!active) return;
     try {
       fs.rmSync(active.sessionDir, { recursive: true, force: true });

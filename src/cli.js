@@ -11,20 +11,156 @@ const { SessionManager } = require('./session');
 // Usage
 // ---------------------------------------------------------------------------
 
-function printUsage() {
-  console.log(`Usage: brainstorm-companion <command> [options]
+const HELP = {
+  main: `Usage: brainstorm-companion <command> [options]
+
+Opens a browser window for visual brainstorming alongside AI coding sessions.
+Agents push HTML content and users interact visually.
 
 Commands:
-  start    Start the brainstorm server
+  start    Start the brainstorm server and open browser
   push     Push HTML content to the browser
   events   Read user interaction events
   clear    Clear content or events
   stop     Stop the server
   status   Show server status
 
+Global Options:
+  --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
+  --session <id>        Target a specific session (required for parallel instances)
+  --mcp                 Run as MCP server (stdio JSON-RPC)
+  --help, -h            Show help (use "<command> --help" for command details)
+
+Examples:
+  brainstorm-companion start
+  brainstorm-companion push --html '<h2>Hello</h2>'
+  brainstorm-companion push mockup.html --slot a --label "Option A"
+  echo '<h2>World</h2>' | brainstorm-companion push -
+  brainstorm-companion events --format json
+  brainstorm-companion stop`,
+
+  start: `Usage: brainstorm-companion start [options]
+
+Start the brainstorm server and open a browser window.
+Each start creates a new isolated session with its own port and data directory.
+
 Options:
-  --mcp    Run as MCP server
-  --help   Show this help`);
+  --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
+  --port <number>       Bind to specific port (default: random ephemeral)
+  --host <address>      Bind address (default: 127.0.0.1)
+  --foreground          Run server in foreground (don't background)
+  --no-open             Don't auto-open browser
+
+Output:
+  Server started: http://127.0.0.1:<port>
+  Session ID: <id>
+
+  Save the Session ID to target this instance with other commands when
+  running multiple sessions in parallel.
+
+Examples:
+  brainstorm-companion start
+  brainstorm-companion start --project-dir ./my-project --no-open
+  brainstorm-companion start --port 8080 --foreground`,
+
+  push: `Usage: brainstorm-companion push [<file|->] [options]
+
+Push HTML content to the active brainstorm browser window.
+Content auto-reloads in the browser. Supports three input methods:
+  - File path:    brainstorm-companion push mockup.html
+  - Stdin:        echo '<h2>Hi</h2>' | brainstorm-companion push -
+  - Inline:       brainstorm-companion push --html '<h2>Hi</h2>'
+
+For side-by-side comparison, push to named slots (a, b, c):
+  brainstorm-companion push --html '<h2>A</h2>' --slot a --label "Design A"
+  brainstorm-companion push --html '<h2>B</h2>' --slot b --label "Design B"
+
+Options:
+  --html <content>      Inline HTML content
+  --slot <a|b|c>        Target slot for comparison mode
+  --label <name>        Display label for the slot
+  --project-dir <path>  Session storage location
+  --session <id>        Target a specific session
+
+CSS Classes Available:
+  .options, .option     Selectable option cards (vertical)
+  .cards, .card         Grid cards with images
+  .mockup               Container with .mockup-header and .mockup-body
+  .split                Side-by-side columns
+  .pros-cons            Pros/cons comparison grid
+
+Interactive Elements:
+  Add data-choice="value" and onclick="toggleSelect(this)" to make
+  elements clickable. Clicks are captured as events.
+
+Auto-detected Libraries (CDN injected automatically):
+  class="mermaid"       → Mermaid diagram rendering
+  class="language-*"    → Prism.js syntax highlighting
+  $$ math $$            → KaTeX math rendering`,
+
+  events: `Usage: brainstorm-companion events [options]
+
+Read user interaction events from the active brainstorm session.
+Events are generated when users click interactive elements in the browser.
+
+Options:
+  --format <json|text>  Output format (default: json)
+  --clear               Clear events after reading
+  --project-dir <path>  Session storage location
+  --session <id>        Target a specific session
+
+Event Types:
+  click       User clicked a [data-choice] element
+  preference  User selected a preferred option in comparison mode
+  tab-switch  User switched tabs in comparison mode
+  view-change User toggled view mode in comparison mode
+
+Examples:
+  brainstorm-companion events
+  brainstorm-companion events --format text --clear
+  brainstorm-companion events --session 1234-567890`,
+
+  clear: `Usage: brainstorm-companion clear [options]
+
+Clear content or events from the active session.
+
+Options:
+  --slot <a|b|c>        Clear a specific comparison slot
+  --all                 Clear all content (all slots and screens)
+  --events              Clear events only
+  --project-dir <path>  Session storage location
+  --session <id>        Target a specific session
+
+Examples:
+  brainstorm-companion clear --events
+  brainstorm-companion clear --slot a
+  brainstorm-companion clear --all`,
+
+  stop: `Usage: brainstorm-companion stop [options]
+
+Stop the brainstorm server and end the session.
+
+Options:
+  --project-dir <path>  Session storage location
+  --session <id>        Target a specific session
+
+Examples:
+  brainstorm-companion stop
+  brainstorm-companion stop --session 1234-567890`,
+
+  status: `Usage: brainstorm-companion status [options]
+
+Show information about the active brainstorm session.
+
+Options:
+  --project-dir <path>  Session storage location
+  --session <id>        Target a specific session
+
+Output includes: Session ID, URL, uptime, event count, and active slots.`,
+};
+
+function printHelp(command) {
+  console.log(HELP[command] || HELP.main);
 }
 
 // ---------------------------------------------------------------------------
@@ -70,11 +206,13 @@ function openBrowser(url) {
   });
 }
 
-function getActiveOrExit(projectDir) {
-  const session = new SessionManager(projectDir);
-  const active = session.getActive();
+function getActiveOrExit(projectDir, sessionId) {
+  const session = new SessionManager(projectDir, sessionId);
+  const active = session.getActive(sessionId);
   if (!active) {
-    console.error('No active session found.');
+    console.error(sessionId
+      ? `Session not found: ${sessionId}`
+      : 'No active session found. Use --session <id> if running multiple instances.');
     process.exit(1);
   }
   return { session, active };
@@ -118,6 +256,7 @@ async function start(argv) {
 
     instance.server.once('listening', () => {
       console.log(`Server started: ${instance.url}`);
+      console.log(`Session ID: ${path.basename(sessionDir)}`);
       if (!noOpen) {
         openBrowser(instance.url);
       }
@@ -161,6 +300,7 @@ async function start(argv) {
     }
 
     console.log(`Server started: ${serverInfo.url}`);
+    console.log(`Session ID: ${path.basename(sessionDir)}`);
 
     if (!noOpen) {
       openBrowser(serverInfo.url);
@@ -177,6 +317,7 @@ async function push(argv) {
     args: argv,
     options: {
       'project-dir': { type: 'string' },
+      'session':     { type: 'string' },
       'slot':        { type: 'string' },
       'label':       { type: 'string' },
       'html':        { type: 'string' },
@@ -186,6 +327,7 @@ async function push(argv) {
   });
 
   const projectDir = values['project-dir'] || null;
+  const sessionId = values['session'] || null;
   const slot = values['slot'];
   const label = values['label'];
   let html = values['html'];
@@ -197,7 +339,6 @@ async function push(argv) {
       process.exit(1);
     }
     if (fileArg === '-') {
-      // Read from stdin
       html = fs.readFileSync('/dev/stdin', 'utf8');
     } else {
       if (!fs.existsSync(fileArg)) {
@@ -208,12 +349,7 @@ async function push(argv) {
     }
   }
 
-  const session = new SessionManager(projectDir);
-  const active = session.getActive();
-  if (!active) {
-    console.error('No active session found.');
-    process.exit(1);
-  }
+  const { session } = getActiveOrExit(projectDir, sessionId);
 
   const result = session.pushScreen(html, { slot, label });
   console.log(`Content pushed to ${result.path}`);
@@ -231,6 +367,7 @@ function events(argv) {
     args: argv,
     options: {
       'project-dir': { type: 'string' },
+      'session':     { type: 'string' },
       'format':      { type: 'string', default: 'json' },
       'clear':       { type: 'boolean', default: false },
     },
@@ -238,10 +375,11 @@ function events(argv) {
   });
 
   const projectDir = values['project-dir'] || null;
+  const sessionId = values['session'] || null;
   const format = values['format'];
   const doClear = values['clear'];
 
-  const session = new SessionManager(projectDir);
+  const { session } = getActiveOrExit(projectDir, sessionId);
   const eventList = session.readEvents();
 
   if (format === 'text') {
@@ -272,6 +410,7 @@ function clear(argv) {
     args: argv,
     options: {
       'project-dir': { type: 'string' },
+      'session':     { type: 'string' },
       'slot':        { type: 'string' },
       'all':         { type: 'boolean', default: false },
       'events':      { type: 'boolean', default: false },
@@ -280,16 +419,12 @@ function clear(argv) {
   });
 
   const projectDir = values['project-dir'] || null;
+  const sessionId = values['session'] || null;
   const slot = values['slot'];
   const all = values['all'];
   const eventsOnly = values['events'];
 
-  const session = new SessionManager(projectDir);
-  const active = session.getActive();
-  if (!active) {
-    console.error('No active session found.');
-    process.exit(1);
-  }
+  const { session } = getActiveOrExit(projectDir, sessionId);
 
   if (eventsOnly) {
     session.clearEvents();
@@ -315,17 +450,14 @@ function stop(argv) {
     args: argv,
     options: {
       'project-dir': { type: 'string' },
+      'session':     { type: 'string' },
     },
     strict: false,
   });
 
   const projectDir = values['project-dir'] || null;
-  const session = new SessionManager(projectDir);
-  const active = session.getActive();
-  if (!active) {
-    console.error('No active session found.');
-    process.exit(1);
-  }
+  const sessionId = values['session'] || null;
+  const { active } = getActiveOrExit(projectDir, sessionId);
 
   const { serverInfo } = active;
   const pid = serverInfo.pid || serverInfo.serverPid;
@@ -352,16 +484,20 @@ function status(argv) {
     args: argv,
     options: {
       'project-dir': { type: 'string' },
+      'session':     { type: 'string' },
     },
     strict: false,
   });
 
   const projectDir = values['project-dir'] || null;
-  const session = new SessionManager(projectDir);
+  const targetSession = values['session'] || null;
+  const session = new SessionManager(projectDir, targetSession);
   const statusInfo = session.getStatus();
 
   if (!statusInfo) {
-    console.error('No active session found.');
+    console.error(targetSession
+      ? `Session not found: ${targetSession}`
+      : 'No active session found.');
     process.exit(1);
   }
 
@@ -411,15 +547,21 @@ function main() {
   const command = args[0];
 
   if (!command || command === '--help' || command === '-h') {
-    printUsage();
+    printHelp('main');
     return;
   }
 
   const handler = COMMANDS[command];
   if (!handler) {
-    console.error(`Unknown command: ${command}`);
-    printUsage();
+    console.error(`Unknown command: ${command}\n`);
+    printHelp('main');
     process.exitCode = 1;
+    return;
+  }
+
+  // Per-command help
+  if (args.includes('--help') || args.includes('-h')) {
+    printHelp(command);
     return;
   }
 
