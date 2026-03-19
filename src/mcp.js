@@ -50,7 +50,7 @@ class McpServer {
         this.respond(id, {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'brainstorm-companion', version: '1.0.0' }
+          serverInfo: { name: 'brainstorm-companion', version: '1.1.0' }
         });
         break;
 
