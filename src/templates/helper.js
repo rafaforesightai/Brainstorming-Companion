@@ -11,7 +11,7 @@
     };
     ws.onmessage = (msg) => {
       const data = JSON.parse(msg.data);
-      if (data.type === 'reload') {
+      if (data.type === 'reload' || data.type === 'slots-update' || data.type === 'slot-content') {
         window.location.reload();
       }
     };
