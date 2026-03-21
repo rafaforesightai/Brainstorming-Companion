@@ -46,6 +46,8 @@ Start the brainstorm server and open a browser window.
 If a session is already running for this project, it reuses it (prints the
 existing URL). Use --new to force a separate session.
 
+Sessions are persistent — they never time out. Stop explicitly with "stop".
+
 Options:
   --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
   --port <number>       Bind to specific port (default: random ephemeral)
@@ -304,7 +306,7 @@ async function start(argv) {
         BRAINSTORM_PORT: String(port),
         // No BRAINSTORM_OWNER_PID in background mode — the CLI process
         // exits immediately, so the server must live independently.
-        // Server still has 30-minute idle timeout for cleanup.
+        // No idle timeout — session persists until explicitly stopped.
       },
     });
     child.unref();

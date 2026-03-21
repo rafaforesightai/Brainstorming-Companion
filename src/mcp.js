@@ -50,7 +50,7 @@ class McpServer {
         this.respond(id, {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'brainstorm-companion', version: '1.1.0' }
+          serverInfo: { name: 'brainstorm-companion', version: '2.0.0' }
         });
         break;
 
@@ -126,52 +126,120 @@ class McpServer {
     return [
       {
         name: 'brainstorm_start_session',
-        description: 'Start a brainstorm companion server and open a browser window for visual brainstorming. Returns the URL.',
+        description: `Start a visual brainstorming session — opens a browser window where you push HTML content and the user interacts visually. Returns the session URL. Sessions have NO timeout and persist until explicitly stopped.
+
+COMPLETE USAGE GUIDE:
+1. Call brainstorm_start_session ONCE with project_dir set to the current working directory. It returns { url, session_dir }.
+2. Call brainstorm_push_screen to send HTML content — the browser auto-reloads instantly. Call it as many times as needed to update content without restarting.
+3. Call brainstorm_read_events to get user clicks/preferences. Use clear_after_read:true between rounds.
+4. Call brainstorm_stop_session when done to free the port and clean up.
+
+SINGLE SCREEN MODE: Push HTML fragments (not full documents). The frame template wraps content with themed CSS (auto light/dark mode).
+
+COMPARISON MODE: Push to slots a/b/c with labels for side-by-side comparison with tabs and preference buttons.
+
+BUILT-IN CSS CLASSES (themed light/dark):
+  .options + .option — Selectable vertical option cards with .letter (A/B/C badge) and .content
+  .cards + .card — Grid cards with .card-image and .card-body
+  .mockup — Browser-window container with .mockup-header and .mockup-body
+  .split — Two-column 50/50 side-by-side layout
+  .pros-cons — Pros/cons grid with .pros (green) and .cons (red)
+  .placeholder — Dashed placeholder area
+  .mock-nav, .mock-sidebar, .mock-content, .mock-button, .mock-input — UI mockup blocks
+  .subtitle — Muted text below headings
+  .section — Block with top margin spacing
+  .label — Small uppercase badge
+
+MAKING ELEMENTS INTERACTIVE:
+  Add data-choice="value" and onclick="toggleSelect(this)" to any element to capture clicks as events.
+  For multi-select, add data-multiselect to the container.
+  Example: <div class="option" data-choice="grid" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>Grid</h3></div></div>
+
+AUTO-DETECTED LIBRARIES (CDN injected automatically):
+  class="mermaid" → Mermaid diagrams (flowchart, sequence, class, state, ER, Gantt, pie)
+  class="language-*" → Prism.js syntax highlighting
+  $$...$$ or class="math" → KaTeX math rendering
+
+EVENT TYPES returned by brainstorm_read_events:
+  click — User clicked a [data-choice] element. Fields: choice, text, id, timestamp
+  preference — User picked a preferred slot in comparison mode. Fields: choice (slot id), timestamp
+  tab-switch — User switched tabs. Fields: slot, timestamp
+  view-change — User toggled view mode. Fields: mode, timestamp
+
+WORKFLOW PATTERNS:
+  Single Decision: start → push (options with data-choice) → tell user to select → read_events → use choice → stop
+  A/B/C Comparison: start → push slot a → push slot b → tell user to compare → read_events → look for preference → stop
+  Multi-Round: start → push round 1 → read_events(clear_after_read:true) → clear_screen → push round 2 → read_events → stop
+  Progressive Refinement: start → push v1 → get feedback → push v2 (same browser updates) → iterate → stop
+
+BEST PRACTICES:
+  - ALWAYS pass project_dir (use cwd) to avoid cross-agent conflicts
+  - NEVER restart to update content — just call push_screen again
+  - Push HTML fragments, not full documents
+  - Start with <h2> heading + .subtitle describing the decision
+  - One decision per screen
+  - Tell the user the browser is ready after pushing
+  - Give user time before reading events
+  - Always call stop_session when done`,
         inputSchema: {
           type: 'object',
           properties: {
-            project_dir: { type: 'string', description: 'Project directory for session storage' },
-            port: { type: 'number', description: 'Port to bind to (default: random)' },
-            open_browser: { type: 'boolean', description: 'Whether to open the browser (default: true)' }
+            project_dir: { type: 'string', description: 'Project directory for session storage (ALWAYS pass this — use cwd)' },
+            port: { type: 'number', description: 'Port to bind to (default: random ephemeral)' },
+            open_browser: { type: 'boolean', description: 'Whether to open the browser automatically (default: true)' }
           }
         }
       },
       {
         name: 'brainstorm_push_screen',
-        description: 'Push HTML content to the brainstorm browser window. Supports comparison mode via slots.',
+        description: `Push HTML content to the brainstorm browser window. The browser auto-reloads instantly — call repeatedly to update content without restarting the session.
+
+SINGLE SCREEN: Pass html only. Previous content is replaced.
+COMPARISON MODE: Pass html + slot (a/b/c) + label. Browser shows tabs, side-by-side view, and preference buttons.
+
+Push HTML fragments (not full <html> documents). The frame template adds theming, fonts, and scroll handling.
+
+Built-in CSS classes: .options/.option (selectable cards), .cards/.card (grid), .mockup (browser frame), .split (two-column), .pros-cons (tradeoffs).
+Interactive: Add data-choice="value" onclick="toggleSelect(this)" to capture clicks as events.
+Auto-detected: class="mermaid" (diagrams), class="language-*" (syntax highlighting), $$...$$ (math).`,
         inputSchema: {
           type: 'object',
           properties: {
-            html: { type: 'string', description: 'HTML content to display' },
-            slot: { type: 'string', description: 'Slot for comparison mode: a, b, or c' },
-            label: { type: 'string', description: 'Label for the slot' }
+            html: { type: 'string', description: 'HTML fragment to display (not a full document — the frame template wraps it)' },
+            slot: { type: 'string', description: 'Slot for comparison mode: a, b, or c. When used, browser shows tabbed comparison view.' },
+            label: { type: 'string', description: 'Display label for the slot tab (e.g., "Option A", "Minimal", "Dark Theme")' }
           },
           required: ['html']
         }
       },
       {
         name: 'brainstorm_read_events',
-        description: 'Read user interaction events (clicks, preferences) from the brainstorm browser.',
+        description: `Read user interaction events from the brainstorm browser. Returns { events: [...], count: N }.
+
+Event types: click (data-choice element clicked — fields: choice, text, id), preference (slot comparison pick — fields: choice), tab-switch (tab changed — fields: slot), view-change (view toggled — fields: mode). All events include timestamp.
+
+Use clear_after_read: true between brainstorming rounds to avoid reading stale events from the previous round.
+Give the user time to interact before reading — don't read immediately after pushing content.`,
         inputSchema: {
           type: 'object',
           properties: {
-            clear_after_read: { type: 'boolean', description: 'Clear events after reading (default: false)' }
+            clear_after_read: { type: 'boolean', description: 'Clear events after reading to avoid stale data in next round (default: false)' }
           }
         }
       },
       {
         name: 'brainstorm_clear_screen',
-        description: 'Clear content from the brainstorm browser window.',
+        description: 'Clear content from the brainstorm browser. Pass slot to clear a specific comparison slot, or omit to clear all content (all slots and screens). Useful between multi-round brainstorming to reset the view before pushing new content.',
         inputSchema: {
           type: 'object',
           properties: {
-            slot: { type: 'string', description: 'Clear specific slot (a, b, or c). Omit to clear all.' }
+            slot: { type: 'string', description: 'Clear specific slot (a, b, or c). Omit to clear all content.' }
           }
         }
       },
       {
         name: 'brainstorm_stop_session',
-        description: 'Stop the brainstorm companion server and clean up.',
+        description: 'Stop the brainstorm companion server and clean up all session files. Always call this when done brainstorming to free the port and remove temp files. Safe to call multiple times.',
         inputSchema: { type: 'object', properties: {} }
       }
     ];
