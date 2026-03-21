@@ -1,9 +1,9 @@
 ---
 name: brainstorm-companion
-description: Visual brainstorming companion — opens a browser window for comparing design mockups, architecture options, and UI prototypes. Agents push HTML content and users interact visually.
+description: Visual brainstorming companion — opens a browser window for comparing design mockups, architecture options, and UI prototypes. Agents push HTML content and users interact visually. Sessions are persistent and never time out.
 ---
 
-# Brainstorm Companion
+# Brainstorm Companion — Complete Agent Reference
 
 ## When to Use
 
@@ -15,6 +15,16 @@ Use this tool when you need to:
 - Show interactive prototypes or wireframes
 
 **Don't use** for plain text output, simple data, or anything that works fine in the terminal.
+
+## Session Lifecycle
+
+Sessions are **persistent** — they never time out. A session stays alive until explicitly stopped via `brainstorm_stop_session`. This means:
+- No 30-minute idle timeout
+- Sessions survive long user breaks
+- You only need to start once per workflow
+- Always clean up with `brainstorm_stop_session` when done
+
+---
 
 ## MCP Tools Reference
 
@@ -34,8 +44,6 @@ brainstorm_start_session({
 **Always pass `project_dir`** — this keeps session files with the project and avoids conflicts between agents. Without it, all sessions go to `/tmp/brainstorm-companion/` and may collide.
 
 **Calling `brainstorm_start_session` multiple times is safe** — it returns the existing session URL if one is already running. You do NOT need to stop and restart to update content. Just call `brainstorm_push_screen` to update the same browser window.
-
-The server runs independently in the background with a 30-minute idle timeout.
 
 ### brainstorm_push_screen
 
@@ -93,6 +101,8 @@ brainstorm_stop_session({})
 ```
 
 Always call this when done brainstorming to free the port and clean up files.
+
+---
 
 ## HTML Content — What to Push
 
@@ -271,6 +281,8 @@ Use `$$...$$` for display math. KaTeX CDN is injected automatically.
 <p>$$L = -\sum_{i} y_i \log(\hat{y}_i)$$</p>
 ```
 
+---
+
 ## CSS Classes Quick Reference
 
 | Class | Purpose |
@@ -300,6 +312,8 @@ Use `$$...$$` for display math. KaTeX CDN is injected automatically.
 | `.mock-button` | Styled button element |
 | `.mock-input` | Styled input field |
 
+---
+
 ## Event Types
 
 | Event | When | Key Fields |
@@ -310,6 +324,8 @@ Use `$$...$$` for display math. KaTeX CDN is injected automatically.
 | `view-change` | User toggles side-by-side vs single view | `mode` |
 
 All events include a `timestamp` field (Unix ms).
+
+---
 
 ## Workflow Patterns
 
@@ -374,6 +390,8 @@ All events include a `timestamp` field (Unix ms).
 
 6. brainstorm_stop_session({})
 ```
+
+---
 
 ## Best Practices
 

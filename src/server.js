@@ -11,7 +11,10 @@ const { detectLibraries, buildInjections } = require('./content-detect');
 // Constants
 // ---------------------------------------------------------------------------
 
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+// Idle timeout is DISABLED by default (0 = no timeout).  Sessions stay alive
+// until explicitly stopped via `stop` / `brainstorm_stop_session`, or the
+// owner process exits.  Pass a positive `idleTimeoutMs` to override.
+const DEFAULT_IDLE_TIMEOUT_MS = 0;
 const OWNER_CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
 
 const MIME_TYPES = {
@@ -110,6 +113,7 @@ function startServer(config = {}) {
     host = '127.0.0.1',
     port: requestedPort = 0,
     ownerPid = null,
+    idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS,
     logFn = console.log,
   } = config;
 
@@ -141,9 +145,11 @@ function startServer(config = {}) {
 
   function resetIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
+    // 0 or falsy = no idle timeout — session stays alive until explicitly stopped
+    if (!idleTimeoutMs) return;
     idleTimer = setTimeout(() => {
       shutdown('idle-timeout');
-    }, IDLE_TIMEOUT_MS);
+    }, idleTimeoutMs);
     // Don't block the event loop
     if (idleTimer.unref) idleTimer.unref();
   }
@@ -614,6 +620,7 @@ if (require.main === module) {
     screenDir,
     host: process.env.BRAINSTORM_HOST || '127.0.0.1',
     port: process.env.BRAINSTORM_PORT ? parseInt(process.env.BRAINSTORM_PORT, 10) : 0,
+    idleTimeoutMs: process.env.BRAINSTORM_IDLE_TIMEOUT ? parseInt(process.env.BRAINSTORM_IDLE_TIMEOUT, 10) : 0,
   });
   instance.server.on('listening', () => {
     console.log(JSON.stringify({ type: 'server-ready', url: instance.url }));
