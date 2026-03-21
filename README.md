@@ -278,6 +278,10 @@ graph TD
 6. Each session is fully isolated: own port, own directory, own event log
 7. Server runs independently with a 30-minute idle timeout; `stop` cleans up immediately
 
+## Author
+
+Created by [Rafael Maya](https://github.com/rafaforesightai) at [Foresight AI Partners](https://github.com/rafaforesightai).
+
 ## License
 
-MIT
+MIT License. See [LICENSE](LICENSE) for details.

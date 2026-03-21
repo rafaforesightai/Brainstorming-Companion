@@ -1,9 +1,10 @@
 {
   "name": "brainstorm-companion",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "AI-assisted visual brainstorming companion",
   "type": "commonjs",
   "license": "MIT",
+  "author": "Rafael Maya <rafa@foresightaipartners.com> (https://github.com/rafaforesightai)",
   "keywords": [
     "brainstorm",
     "visual",
