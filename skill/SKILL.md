@@ -20,7 +20,7 @@ Use this tool when you need to:
 
 ### brainstorm_start_session
 
-Start the server and open a browser window.
+Start the server and open a browser window. If a session is already running, it reuses it — no duplicate browsers.
 
 ```
 brainstorm_start_session({
@@ -33,11 +33,13 @@ brainstorm_start_session({
 
 **Always pass `project_dir`** — this keeps session files with the project and avoids conflicts between agents. Without it, all sessions go to `/tmp/brainstorm-companion/` and may collide.
 
-The server runs independently in the background with a 30-minute idle timeout. It survives the calling process exiting.
+**Calling `brainstorm_start_session` multiple times is safe** — it returns the existing session URL if one is already running. You do NOT need to stop and restart to update content. Just call `brainstorm_push_screen` to update the same browser window.
+
+The server runs independently in the background with a 30-minute idle timeout.
 
 ### brainstorm_push_screen
 
-Push HTML content to the browser. The browser auto-reloads — no manual refresh needed.
+Push HTML content to the browser. **The browser auto-reloads instantly** — no manual refresh needed. Call this repeatedly to update the same browser window with new content. You do NOT need to restart the session.
 
 **Single screen mode:**
 ```
@@ -376,12 +378,22 @@ All events include a `timestamp` field (Unix ms).
 ## Best Practices
 
 1. **Always pass `project_dir`** to `brainstorm_start_session` — avoids cross-agent conflicts
-2. **Push fragments, not full documents** — the frame template handles `<html>`, theming, and scroll
-3. **Start with a heading** — `<h2>` describes what the user is looking at
-4. **Add a `.subtitle`** — describes the decision being made
-5. **One decision per screen** — don't combine unrelated choices
-6. **Use slot labels** — `label` makes comparison tabs readable
-7. **Use `data-choice` for interaction** — the built-in `toggleSelect` emits events automatically
-8. **Tell the user to interact** — after pushing content, let them know the browser is ready
-9. **Read events after user has time** — don't immediately read; wait for user to respond
-10. **Clean up with `brainstorm_stop_session`** — frees the port and removes temp files
+2. **Never restart to update content** — just call `brainstorm_push_screen` again; the browser auto-reloads
+3. **One `brainstorm_start_session` per workflow** — it reuses the existing session automatically
+4. **Push fragments, not full documents** — the frame template handles `<html>`, theming, and scroll
+5. **Start with a heading** — `<h2>` describes what the user is looking at
+6. **Add a `.subtitle`** — describes the decision being made
+7. **One decision per screen** — don't combine unrelated choices
+8. **Use slot labels** — `label` makes comparison tabs readable
+9. **Use `data-choice` for interaction** — the built-in `toggleSelect` emits events automatically
+10. **Tell the user to interact** — after pushing content, let them know the browser is ready
+11. **Read events after user has time** — don't immediately read; wait for user to respond
+12. **Clean up with `brainstorm_stop_session`** — frees the port and removes temp files
+
+## Common Mistakes
+
+- **Starting a new session for each update** — DON'T. Call `push_screen` to update the existing browser.
+- **Omitting `project_dir`** — leads to `/tmp` collisions between agents.
+- **Pushing full HTML documents** — push fragments; the frame template adds theming and structure.
+- **Reading events immediately after push** — give the user time to interact first.
+- **Forgetting to stop** — always call `brainstorm_stop_session` when done.
