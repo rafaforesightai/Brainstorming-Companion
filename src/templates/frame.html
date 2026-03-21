@@ -78,6 +78,26 @@
       font-size: 0.875rem;
       color: var(--text-secondary);
       z-index: 100;
+      transition: transform 0.2s ease;
+    }
+    .indicator-bar.hidden {
+      transform: translateY(100%);
+    }
+    .indicator-bar .dismiss {
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0.25rem 0.5rem;
+      opacity: 0.6;
+    }
+    .indicator-bar .dismiss:hover {
+      opacity: 1;
     }
 
     .selected-text {
@@ -276,8 +296,9 @@
       <!-- CONTENT -->
     </div>
   </div>
-  <div class="indicator-bar">
+  <div class="indicator-bar" id="indicator-bar">
     <span id="indicator-text">Click an option above, then return to the terminal</span>
+    <button class="dismiss" onclick="document.getElementById('indicator-bar').classList.add('hidden')" title="Dismiss">&times;</button>
   </div>
 </body>
 </html>

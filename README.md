@@ -26,16 +26,21 @@ brainstorm-companion start --project-dir .
 # → Server started: http://127.0.0.1:54321
 # → Session ID: 1234-1700000000000
 
-# 2. Push content
+# 2. Push content — browser updates instantly
 brainstorm-companion push --html '<h2>Dashboard Layout</h2><div class="options"><div class="option" data-choice="grid" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>Grid Layout</h3><p>Cards in a responsive grid</p></div></div><div class="option" data-choice="list" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>List Layout</h3><p>Vertical scrolling list</p></div></div></div>'
 
-# 3. Read user's selection
+# 3. Update content — same browser, no restart needed
+brainstorm-companion push --html '<h2>Updated Layout</h2><p>Refined version based on feedback</p>'
+
+# 4. Read user's selection
 brainstorm-companion events
 # → [{"type":"click","choice":"grid","text":"A Grid Layout Cards in a responsive grid","timestamp":1700000001234}]
 
-# 4. Stop when done
+# 5. Stop when done
 brainstorm-companion stop
 ```
+
+**Key behavior:** Calling `start` when a session is already running reuses it — no duplicate browsers. Just keep calling `push` to update the same window. The browser auto-reloads on every push.
 
 ### Side-by-Side Comparison
 
@@ -49,6 +54,24 @@ brainstorm-companion push --html '<h2>Hybrid</h2><p>Collapsible sidebar + top ba
 
 Browser shows all three side-by-side with tabs, keyboard shortcuts (1/2/3), and a preference bar.
 
+### Updating Content In-Place
+
+The browser auto-reloads whenever content is pushed. No need to restart the session or manually refresh:
+
+```bash
+# Initial mockup
+brainstorm-companion push --html '<h2>v1</h2><p>First draft</p>'
+# → Browser shows v1
+
+# Refined mockup — same browser window updates automatically
+brainstorm-companion push --html '<h2>v2</h2><p>Improved based on feedback</p>'
+# → Browser shows v2
+
+# Update a single slot in comparison mode
+brainstorm-companion push --html '<h2>Updated Option A</h2>' --slot a --label "Revised"
+# → Only slot A updates, others stay
+```
+
 ### From Files or Stdin
 
 ```bash
@@ -59,15 +82,15 @@ cat design.html | brainstorm-companion push -
 
 ### Parallel Instances
 
-Multiple agents can run simultaneously on the same project without interference:
+Multiple agents can run simultaneously on the same project. Use `--new` to force a separate session:
 
 ```bash
 # Agent A
-brainstorm-companion start --project-dir .
+brainstorm-companion start --project-dir . --new
 # → Session ID: 1111-000
 
 # Agent B
-brainstorm-companion start --project-dir .
+brainstorm-companion start --project-dir . --new
 # → Session ID: 2222-000
 
 # Each targets its own session
@@ -76,6 +99,8 @@ brainstorm-companion push --html '<h2>B</h2>' --session 2222-000
 brainstorm-companion events --session 1111-000
 brainstorm-companion stop --session 1111-000
 ```
+
+Without `--new`, `start` reuses the existing session (the default for single-agent use).
 
 ## MCP Server
 
@@ -100,8 +125,8 @@ Add to `~/.claude/settings.json`:
 
 | Tool | Description |
 |------|-------------|
-| `brainstorm_start_session` | Start server and open browser. Returns URL and session directory. |
-| `brainstorm_push_screen` | Push HTML content. Use `slot` + `label` for comparison mode. |
+| `brainstorm_start_session` | Start server (or reuse existing). Returns URL. Always pass `project_dir`. |
+| `brainstorm_push_screen` | Push HTML content. Browser auto-reloads. Use `slot` + `label` for comparison. |
 | `brainstorm_read_events` | Read user interaction events. Option to clear after reading. |
 | `brainstorm_clear_screen` | Clear a specific slot or all content. |
 | `brainstorm_stop_session` | Stop server and clean up session files. |
@@ -118,8 +143,13 @@ Add to `~/.claude/settings.json`:
 3. brainstorm_read_events({})
    → { events: [{ type: "preference", choice: "a" }], count: 1 }
 
-4. brainstorm_stop_session({})
+   // Update content — same browser, no restart
+4. brainstorm_push_screen({ html: "<h2>Revised A</h2>...", slot: "a", label: "Minimal v2" })
+
+5. brainstorm_stop_session({})
 ```
+
+**Important:** Call `brainstorm_start_session` once. It returns the existing session if already running. Update content by calling `brainstorm_push_screen` repeatedly — the browser auto-reloads each time.
 
 ## CLI Reference
 
@@ -127,8 +157,8 @@ Add to `~/.claude/settings.json`:
 brainstorm-companion <command> [options]
 
 Commands:
-  start    Start the brainstorm server and open browser
-  push     Push HTML content to the browser
+  start    Start the brainstorm server (reuses existing session by default)
+  push     Push HTML content to the browser (auto-reloads)
   events   Read user interaction events
   clear    Clear content or events
   stop     Stop the server
@@ -144,10 +174,10 @@ Global Options:
 ### `start`
 
 ```
-brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--foreground] [--no-open]
+brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--foreground] [--no-open] [--new]
 ```
 
-Creates a new session, starts the HTTP+WebSocket server on a random port, and opens the default browser. Prints the URL and Session ID.
+If a session is already running, prints its URL and reuses it. Use `--new` to force a separate parallel session.
 
 ### `push`
 
@@ -155,7 +185,7 @@ Creates a new session, starts the HTTP+WebSocket server on a random port, and op
 brainstorm-companion push [<file|->] [--html <content>] [--slot a|b|c] [--label <name>]
 ```
 
-Three input methods: file path, stdin (`-`), or inline (`--html`). Use `--slot` for comparison mode.
+Three input methods: file path, stdin (`-`), or inline (`--html`). Use `--slot` for comparison mode. The browser auto-reloads on every push — no restart needed.
 
 ### `events`
 
@@ -240,12 +270,13 @@ graph TD
 
 ## How It Works
 
-1. `start` creates an isolated session directory and spawns an HTTP+WebSocket server on a random port
-2. `push` writes HTML files to the session directory; the file watcher detects changes and broadcasts reload to connected browsers via WebSocket
-3. The browser renders content in a themed frame with click capture on `[data-choice]` elements
+1. `start` checks for an existing active session — reuses it if found, otherwise creates a new one with its own port and directory
+2. `push` writes HTML files to the session directory; the file watcher detects changes and broadcasts reload to the browser via WebSocket
+3. The browser auto-reloads and renders content in a themed frame with click capture on `[data-choice]` elements
 4. Click events are sent over WebSocket to the server and appended to a `.events` JSONL file
 5. `events` reads the JSONL file and returns structured JSON
 6. Each session is fully isolated: own port, own directory, own event log
+7. Server runs independently with a 30-minute idle timeout; `stop` cleans up immediately
 
 ## License
 

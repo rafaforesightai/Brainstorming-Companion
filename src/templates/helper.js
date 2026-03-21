@@ -74,5 +74,13 @@
     choice: (value, metadata = {}) => sendEvent({ type: 'choice', value, ...metadata })
   };
 
+  // Auto-hide indicator bar if no interactive elements exist
+  document.addEventListener('DOMContentLoaded', () => {
+    const bar = document.getElementById('indicator-bar');
+    if (bar && !document.querySelector('[data-choice]')) {
+      bar.classList.add('hidden');
+    }
+  });
+
   connect();
 })();
