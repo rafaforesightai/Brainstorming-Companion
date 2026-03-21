@@ -208,7 +208,7 @@ function startServer(config = {}) {
         } else {
           html = html + comparisonHelperInjection;
         }
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(html);
       } else {
         // Single screen mode
@@ -226,7 +226,7 @@ function startServer(config = {}) {
           html = html.replace('</head>', cdnTags + '\n</head>');
         }
         html = injectHelper(html);
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(html);
       }
       return;
@@ -248,7 +248,7 @@ function startServer(config = {}) {
         html = html.replace('</head>', slotCdnTags + '\n</head>');
       }
       html = injectHelper(html);
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
       return;
     }

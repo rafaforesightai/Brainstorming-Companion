@@ -42,7 +42,9 @@ Examples:
   start: `Usage: brainstorm-companion start [options]
 
 Start the brainstorm server and open a browser window.
-Each start creates a new isolated session with its own port and data directory.
+
+If a session is already running for this project, it reuses it (prints the
+existing URL). Use --new to force a separate session.
 
 Options:
   --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
@@ -50,18 +52,16 @@ Options:
   --host <address>      Bind address (default: 127.0.0.1)
   --foreground          Run server in foreground (don't background)
   --no-open             Don't auto-open browser
+  --new                 Force a new session even if one is already running
 
 Output:
   Server started: http://127.0.0.1:<port>
   Session ID: <id>
 
-  Save the Session ID to target this instance with other commands when
-  running multiple sessions in parallel.
-
 Examples:
   brainstorm-companion start
   brainstorm-companion start --project-dir ./my-project --no-open
-  brainstorm-companion start --port 8080 --foreground`,
+  brainstorm-companion start --new  # force separate parallel session`,
 
   push: `Usage: brainstorm-companion push [<file|->] [options]
 
@@ -231,6 +231,7 @@ async function start(argv) {
       'host':        { type: 'string', default: '127.0.0.1' },
       'foreground':  { type: 'boolean', default: false },
       'no-open':     { type: 'boolean', default: false },
+      'new':         { type: 'boolean', default: false },
     },
     strict: false,
   });
@@ -240,8 +241,22 @@ async function start(argv) {
   const port = parseInt(values['port'], 10) || 0;
   const foreground = values['foreground'];
   const noOpen = values['no-open'];
+  const forceNew = values['new'];
 
   const session = new SessionManager(projectDir);
+
+  // Reuse existing active session unless --new is passed
+  const existing = !forceNew ? session.getActive() : null;
+  if (existing) {
+    const url = existing.serverInfo.url;
+    console.log(`Server already running: ${url}`);
+    console.log(`Session ID: ${existing.sessionId}`);
+    if (!noOpen) {
+      openBrowser(url);
+    }
+    return;
+  }
+
   const { sessionDir } = session.create();
 
   if (foreground) {
