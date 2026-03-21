@@ -287,7 +287,9 @@ async function start(argv) {
         BRAINSTORM_DIR: sessionDir,
         BRAINSTORM_HOST: host,
         BRAINSTORM_PORT: String(port),
-        BRAINSTORM_OWNER_PID: String(process.pid),
+        // No BRAINSTORM_OWNER_PID in background mode — the CLI process
+        // exits immediately, so the server must live independently.
+        // Server still has 30-minute idle timeout for cleanup.
       },
     });
     child.unref();
