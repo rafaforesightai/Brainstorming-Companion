@@ -12,28 +12,34 @@ Zero dependencies. Node.js >= 18 only.
 npm install -g brainstorm-companion
 ```
 
-Or run directly:
-
-```bash
-npx brainstorm-companion start
-```
-
 ### Claude Code MCP Setup
 
-Add to `~/.claude/settings.json`:
+Add to `~/.claude/.mcp.json` (create the file if it doesn't exist):
 
 ```json
 {
   "mcpServers": {
     "brainstorm": {
-      "command": "npx",
-      "args": ["brainstorm-companion", "--mcp"]
+      "command": "brainstorm-companion",
+      "args": ["--mcp"]
     }
   }
 }
 ```
 
-Once configured, the agent has access to 5 tools: `brainstorm_start_session`, `brainstorm_push_screen`, `brainstorm_read_events`, `brainstorm_clear_screen`, and `brainstorm_stop_session`. Full documentation is embedded in the tool descriptions — the agent becomes an expert immediately upon connecting.
+Then restart Claude Code. The agent gets 5 tools (`brainstorm_start_session`, `brainstorm_push_screen`, `brainstorm_read_events`, `brainstorm_clear_screen`, `brainstorm_stop_session`) with full usage docs embedded — it knows how to use them immediately.
+
+**Alternative (no global install):** Use `npx` instead:
+```json
+{
+  "mcpServers": {
+    "brainstorm": {
+      "command": "npx",
+      "args": ["brainstorm-companion@latest", "--mcp"]
+    }
+  }
+}
+```
 
 ---
 
