@@ -152,7 +152,7 @@ FULL WORKFLOW:
 
 KEY: Use wait_seconds in read_events so the user's click comes back to you automatically. No need to ask the user "what did you pick?" — the event arrives on its own.
 
-Safe to call start repeatedly — reuses existing session. Sessions persist until stopped.
+Each start is a clean slate — no leftover content. Within one MCP connection, subsequent calls return the existing session. Sessions persist until stopped.
 
 COMPARISON MODE: Push to slots a/b/c with labels for side-by-side view:
   brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
@@ -251,17 +251,39 @@ Use clear_after_read: true between brainstorming rounds to avoid stale events.`,
   // ---------------------------------------------------------------------------
 
   toolStartSession(args) {
-    // If already started, return existing URL
+    // If THIS instance already started a session, return it
     if (this.sessionDir && this.serverInstance && this.serverInstance.url) {
       return { url: this.serverInstance.url, session_dir: this.sessionDir };
     }
 
     const { project_dir, port = 0, open_browser = true, idle_timeout_minutes = 0 } = args;
 
-    // Determine base directory and create session dir
+    // Clean up any orphaned sessions from previous runs
     const baseDir = project_dir
       ? path.join(project_dir, '.superpowers', 'brainstorm')
       : path.join('/tmp', 'brainstorm-companion');
+    try {
+      if (fs.existsSync(baseDir)) {
+        for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const dir = path.join(baseDir, entry.name);
+          const infoPath = path.join(dir, '.server-info');
+          let alive = false;
+          if (fs.existsSync(infoPath)) {
+            try {
+              const info = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
+              const pid = info.pid || info.serverPid;
+              if (pid) { process.kill(pid, 0); alive = true; }
+            } catch { /* dead */ }
+          }
+          if (!alive) {
+            try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Create fresh session dir
     const sessionId = `${process.pid}-${Date.now()}`;
     const sessionDir = path.join(baseDir, sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });

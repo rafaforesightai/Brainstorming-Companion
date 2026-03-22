@@ -29,7 +29,7 @@ No arguments required. Browser opens, content appears, user clicks, event return
 
 - **No setup needed** — `brainstorm_start_session()` works with zero arguments
 - **Sessions are persistent** — they stay alive until you call `brainstorm_stop_session`
-- **Safe to call start multiple times** — reuses existing session, never duplicates
+- **Each start is a clean slate** — no leftover content from previous runs
 - **Optional timeout** — pass `idle_timeout_minutes` for auto-cleanup
 - **Always stop when done** — `brainstorm_stop_session()` frees port and cleans up
 
@@ -39,7 +39,7 @@ No arguments required. Browser opens, content appears, user clicks, event return
 
 ### brainstorm_start_session
 
-Start the server and open a browser. Works with no arguments. Reuses existing session if one is running.
+Start the server and open a browser. Works with no arguments. Always creates a fresh session — no leftover content.
 
 ```
 // Simplest — no args needed:
@@ -56,7 +56,7 @@ brainstorm_start_session({
 
 **No arguments required.** Sessions are auto-isolated by working directory — different projects never collide, even without `project_dir`. Pass `project_dir` only if you want session files stored inside the project folder.
 
-**Calling it multiple times is safe** — returns the existing session. Just call `brainstorm_push_screen` to update content.
+**Calling it multiple times is safe** — each call creates a fresh session. Within a single MCP connection, subsequent calls return the existing session. Just call `brainstorm_push_screen` to update content.
 
 ### brainstorm_push_screen
 
@@ -416,7 +416,7 @@ All events include a `timestamp` field (Unix ms).
 
 1. **Zero config** — `brainstorm_start_session()` works with no arguments; isolation is automatic
 3. **Never restart to update content** — just call `brainstorm_push_screen` again; the browser auto-reloads
-4. **One `brainstorm_start_session` per workflow** — it reuses the existing session automatically
+4. **One `brainstorm_start_session` per workflow** — within MCP, subsequent calls reuse the session
 5. **Push fragments, not full documents** — the frame template handles `<html>`, theming, and scroll
 6. **Start with a heading** — `<h2>` describes what the user is looking at
 7. **Add a `.subtitle`** — describes the decision being made

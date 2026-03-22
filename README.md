@@ -103,9 +103,9 @@ brainstorm-companion stop
 ```
 
 **Key behaviors:**
-- `start` with no args works immediately — auto-isolates by working directory
-- `start` reuses an existing session — never opens duplicate browsers
+- `start` always creates a fresh session — no leftover content from previous runs
 - `push` auto-reloads the browser every time — no restart or refresh needed
+- `start` again? Previous session is stopped, new one opens clean
 
 ### Quick Start (MCP / Agent) — 3 calls, zero config
 
@@ -168,15 +168,15 @@ cat design.html | brainstorm-companion push -
 
 ## Parallel Instances
 
-Multiple agents can run simultaneously on the same project. Use `--new` to force a separate session:
+Each `start` creates a fresh session with its own port and clean directory. Multiple agents can run simultaneously — use `--session` to target each:
 
 ```bash
 # Agent A
-brainstorm-companion start --project-dir . --new
+brainstorm-companion start --project-dir .
 # → Session ID: 1111-000
 
 # Agent B
-brainstorm-companion start --project-dir . --new
+brainstorm-companion start --project-dir .
 # → Session ID: 2222-000
 
 # Each targets its own session
@@ -186,7 +186,7 @@ brainstorm-companion events --session 1111-000
 brainstorm-companion stop --session 1111-000
 ```
 
-Without `--new`, `start` reuses the existing session (the default for single-agent use).
+Use `--reuse` to keep an existing session and its content instead of starting fresh.
 
 ---
 
@@ -343,7 +343,7 @@ graph TD
 brainstorm-companion <command> [options]
 
 Commands:
-  start    Start the brainstorm server (reuses existing session by default)
+  start    Start a fresh brainstorm server (clean slate each time)
   push     Push HTML content to the browser (auto-reloads)
   events   Read user interaction events
   clear    Clear content or events
@@ -360,10 +360,10 @@ Global Options:
 ### `start`
 
 ```
-brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--timeout <min>] [--foreground] [--no-open] [--new]
+brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--timeout <min>] [--foreground] [--no-open] [--reuse]
 ```
 
-If a session is already running, prints its URL and reuses it. Use `--new` to force a separate parallel session. Use `--timeout 30` for auto-cleanup after 30 minutes idle (default: no timeout).
+Always creates a fresh session with a clean slate. Stops any existing session automatically. Use `--reuse` to keep an existing session and its content. Use `--timeout 30` for auto-cleanup after 30 minutes idle.
 
 ### `push`
 

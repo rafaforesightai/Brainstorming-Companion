@@ -57,10 +57,10 @@ Key concepts:
 
 Start the brainstorm server and open a browser window.
 
-If a session is already running for this project, it reuses it (prints the
-existing URL). Use --new to force a separate session.
+Always creates a fresh session with a clean slate — no leftover content from
+previous runs. Stops any existing session automatically.
 
-Sessions persist until explicitly stopped — no timeout by default.
+Use --reuse to keep an existing session instead.
 
 Options:
   --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
@@ -69,7 +69,7 @@ Options:
   --timeout <minutes>   Auto-stop after N minutes of inactivity (default: none)
   --foreground          Run server in foreground (don't background)
   --no-open             Don't auto-open browser
-  --new                 Force a new session even if one is already running
+  --reuse               Reuse existing session if one is running (keep its content)
 
 Output:
   Server started: http://127.0.0.1:<port>
@@ -79,7 +79,7 @@ Examples:
   brainstorm-companion start
   brainstorm-companion start --project-dir .
   brainstorm-companion start --timeout 30       # auto-stop after 30min idle
-  brainstorm-companion start --new --no-open    # parallel session, no browser`,
+  brainstorm-companion start --reuse             # keep existing session`,
 
   push: `Usage: brainstorm-companion push [<file|->] [options]
 
@@ -267,7 +267,7 @@ async function start(argv) {
       'timeout':     { type: 'string' },
       'foreground':  { type: 'boolean', default: false },
       'no-open':     { type: 'boolean', default: false },
-      'new':         { type: 'boolean', default: false },
+      'reuse':       { type: 'boolean', default: false },
     },
     strict: false,
   });
@@ -279,21 +279,33 @@ async function start(argv) {
   const idleTimeoutMs = timeoutMin > 0 ? timeoutMin * 60 * 1000 : 0;
   const foreground = values['foreground'];
   const noOpen = values['no-open'];
-  const forceNew = values['new'];
+  const reuse = values['reuse'];
 
   const session = new SessionManager(projectDir);
 
-  // Reuse existing active session unless --new is passed
-  const existing = !forceNew ? session.getActive() : null;
-  if (existing) {
-    const url = existing.serverInfo.url;
-    console.log(`Server already running: ${url}`);
-    console.log(`Session ID: ${existing.sessionId}`);
-    printNextSteps();
-    if (!noOpen) {
-      openBrowser(url);
+  // Only reuse existing session if explicitly asked with --reuse
+  if (reuse) {
+    const existing = session.getActive();
+    if (existing) {
+      const url = existing.serverInfo.url;
+      console.log(`Reusing session: ${url}`);
+      console.log(`Session ID: ${existing.sessionId}`);
+      printNextSteps();
+      if (!noOpen) {
+        openBrowser(url);
+      }
+      return;
     }
-    return;
+  }
+
+  // Stop any existing session before starting fresh (clean slate)
+  const stale = session.getActive();
+  if (stale) {
+    const pid = stale.serverInfo.pid || stale.serverInfo.serverPid;
+    if (pid) {
+      try { process.kill(pid, 'SIGTERM'); } catch { /* ignore */ }
+    }
+    try { fs.rmSync(stale.sessionDir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 
   const { sessionDir } = session.create();
