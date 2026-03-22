@@ -5,33 +5,99 @@ description: Visual brainstorming companion — opens a browser window for compa
 
 # Brainstorm Companion — Complete Agent Reference
 
-## Quickstart — CLI (preferred, works everywhere including VMs)
+## How to Use (pick the right path for your environment)
 
-The server runs in foreground — run `start` in background so you can push content from other commands.
+### Step 1: Detect your environment
 
-```bash
-brainstorm-companion start --no-open &                          # start in background
-# → Tell user: "Open http://127.0.0.1:XXXXX in your browser"
-brainstorm-companion push --html '<h2>Option A</h2>' --slot a --label "Design A"
-brainstorm-companion push --html '<h2>Option B</h2>' --slot b --label "Design B"
-brainstorm-companion events --wait 120                          # waits for user click
-brainstorm-companion stop
+```
+Can I run Bash commands?
+  YES → Do I have brainstorm_* MCP tools available?
+    YES → Use MCP tools (simplest)
+    NO  → Use CLI via Bash
+  NO  → Cannot use this tool
+
+Does the user have a visible browser?
+  YES → Normal mode (browser auto-opens or user opens the URL)
+  NO  → Headless mode (agent renders + screenshots for the user)
+
+Am I in a VM/container?
+  YES → Use --host 0.0.0.0 so the user's browser can reach the server
+  NO  → Default 127.0.0.1 is fine
 ```
 
-In Claude Code, use `run_in_background: true` for the start command.
+### When to use headed vs headless browser
 
-## Quickstart — MCP Tools (alternative)
+| Scenario | Browser Mode | Why |
+|----------|-------------|-----|
+| User is at their computer | Headed (default) | User sees and interacts directly |
+| Remote agent, user on same machine | Headed (default) | Browser auto-opens for user |
+| Remote agent, user on different machine | Headed + `--host 0.0.0.0` | User opens URL from their machine |
+| Fully autonomous agent (no user watching) | Headless | Agent renders, screenshots, decides |
+| CI/CD or automated testing | Headless | No display available |
+
+For headless rendering, use any headless browser (Puppeteer, Playwright, Chrome `--headless`) to navigate to the brainstorm URL, screenshot, or inspect the DOM.
+
+### Step 2: Check if installed (CLI path only)
+
+```bash
+which brainstorm-companion || npm list -g brainstorm-companion
+# If not found:
+npm install -g brainstorm-companion
+# If global install fails:
+npx brainstorm-companion@latest start   # works without installing
+```
+
+### Step 3: Start and push content
+
+**Path A — MCP tools (if `brainstorm_*` tools are available):**
 
 ```
 brainstorm_start_session()
+// → Returns { url: "http://127.0.0.1:XXXXX" }
+// → Tell user to open the URL in their browser
+
 brainstorm_push_screen({ html: "<h2>Option A</h2>...", slot: "a", label: "Design A" })
 brainstorm_push_screen({ html: "<h2>Option B</h2>...", slot: "b", label: "Design B" })
 brainstorm_read_events({ wait_seconds: 120 })
+// → Returns user's choice automatically
+
 brainstorm_stop_session()
 ```
 
-**After starting, ALWAYS tell the user the URL** so they can open it in their browser.
-The browser may not auto-open in VMs, containers, or remote environments.
+**Path B — CLI via Bash (works everywhere):**
+
+```bash
+# Start server in background (server runs in foreground, must be backgrounded)
+brainstorm-companion start --no-open &
+# or in Claude Code: use run_in_background: true
+
+# Push content
+brainstorm-companion push --html '<h2>Option A</h2>' --slot a --label "Design A"
+brainstorm-companion push --html '<h2>Option B</h2>' --slot b --label "Design B"
+
+# Wait for user interaction
+brainstorm-companion events --wait 120
+
+# Clean up
+brainstorm-companion stop
+```
+
+**Path C — VM/container/remote (localhost not reachable from user's browser):**
+
+```bash
+# Bind to all interfaces so the user's browser can reach it
+brainstorm-companion start --no-open --host 0.0.0.0 &
+# → Tell user to open http://<machine-ip>:XXXXX in their browser
+
+# Everything else is the same
+brainstorm-companion push --html '<h2>Content</h2>'
+brainstorm-companion events --wait 120
+brainstorm-companion stop
+```
+
+### Step 4: Tell the user the URL
+
+After starting, **always tell the user the URL** from the output so they can open it. The browser may not auto-open in VMs, containers, or remote environments.
 
 ## When to Use
 
@@ -448,28 +514,51 @@ All events include a `timestamp` field (Unix ms).
 
 - **Starting a new session for each update** — DON'T. Call `push_screen` to update the existing browser.
 - **Pushing full HTML documents** — push fragments; the frame template adds theming and structure.
-- **Reading events immediately after push** — give the user time to interact first.
-- **Forgetting to stop** — always call `brainstorm_stop_session` when done, or use `idle_timeout_minutes`.
-- **Trying to screenshot, scrape, or verify the browser content** — DON'T. The browser is for the USER to see. Just push content and tell the user it's ready. Never use browser automation, screenshots, curl, or other tools to check the brainstorm browser. The user sees it directly.
-- **Creating HTML files on disk then trying to serve them** — DON'T. Pass HTML directly to `brainstorm_push_screen({ html: "..." })`. No temp files needed.
-- **Trying to access localhost from a VM or container** — The server runs locally. The user's browser opens it automatically. Don't try to proxy, tunnel, or access it from other machines.
+- **Creating HTML files on disk then trying to serve them** — DON'T. Pass HTML directly via `--html` or `push_screen({ html })`.
+- **Forgetting to stop** — always call `stop` / `brainstorm_stop_session` when done.
+- **Going in circles when something fails** — if start works but push fails, check `--session` or the URL. If the browser can't reach localhost (VM/container), use `--host 0.0.0.0` to bind to all interfaces.
 
-## What NOT to Do
+## Agent Autonomy
 
-The brainstorm companion is a **push-and-forget visual tool**. Your job is:
-1. Start the server and tell the user the URL
-2. Push HTML content (inline, not files)
-3. Read events when the user interacts
+This tool is designed for **agents to operate fully autonomously**. Agents can and should:
 
-You should NEVER:
-- Take screenshots of the browser
-- Use browser automation tools (Chrome DevTools, Puppeteer, etc.) to verify content
-- Create HTML files on disk — pass HTML inline to `push --html` or `push_screen`
-- Use curl/fetch/wget to check what's being served
-- Try to access the URL yourself — it's for the user's browser only
-- Try to proxy, tunnel, or forward the port to another machine
-- Worry about whether the user can see it — just tell them the URL
-- Go in circles if something doesn't work — just give the user the URL and instructions
+- **Run the full workflow** — start, push, read events, stop — without human intervention
+- **Verify content** — use `curl`, browser automation, screenshots, or DOM inspection to confirm content renders
+- **Adapt to the environment** — detect if MCP tools are available (use them) or fall back to CLI via Bash
+- **Handle VMs/containers** — use `--host 0.0.0.0` when localhost isn't reachable, tell user the correct URL
+- **Get events automatically** — use `wait_seconds` / `--wait` so user clicks return without polling
+- **Recover from failures** — if `push` fails with "no active session", the server may have died; restart it
+- **Use npx as fallback** — if `brainstorm-companion` isn't installed, `npx brainstorm-companion@latest` works
+
+### Headless mode (fully autonomous)
+
+When no user is watching or no display is available, agents can render content themselves:
+
+```bash
+# Start server
+brainstorm-companion start --no-open --host 0.0.0.0 &
+
+# Push content
+brainstorm-companion push --html '<h2>Dashboard</h2>...'
+
+# Render and screenshot with headless Chrome
+google-chrome --headless --screenshot=/tmp/brainstorm.png http://127.0.0.1:PORT/
+# Or with Puppeteer/Playwright in a script
+
+# Verify content via curl
+curl -s http://127.0.0.1:PORT/ | grep -o '<h2>[^<]*</h2>'
+```
+
+### Troubleshooting for agents
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| "No active session found" after start | Server died (sandbox killed it) | Run start with `run_in_background` or `&` |
+| "Session not found: ID" | Wrong base dir | Don't pass `--project-dir` to some commands but not others |
+| Browser can't reach URL | VM/container isolation | Use `--host 0.0.0.0` and give user the machine IP |
+| `brainstorm-companion: not found` | Not installed | `npm install -g brainstorm-companion` or use `npx` |
+| No display available | Headless environment | Use `--no-open` and render with headless browser |
+| Content not updating in browser | Stale cache | Already fixed — `Cache-Control: no-store` is set |
 
 ---
 

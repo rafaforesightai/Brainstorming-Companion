@@ -416,17 +416,38 @@ Shows Session ID, URL, uptime, event count, and active slots.
 6. Each session is fully isolated: own port, own directory, own event log
 7. Sessions are persistent — they stay alive until explicitly stopped with `stop` or `brainstorm_stop_session`
 
+## Environments
+
+Works in any environment. Adapt based on context:
+
+| Environment | How to start | Browser |
+|-------------|-------------|---------|
+| Local terminal | `brainstorm-companion start` | Auto-opens |
+| Claude Code / AI agent | `brainstorm-companion start --no-open &` | Tell user the URL |
+| VM / container | `brainstorm-companion start --no-open --host 0.0.0.0 &` | User opens `http://<ip>:PORT` |
+| Headless / CI | `brainstorm-companion start --no-open &` | Use headless Chrome or curl to verify |
+
+For headless rendering (no display):
+```bash
+brainstorm-companion start --no-open &
+brainstorm-companion push --html '<h2>Content</h2>'
+# Render with headless Chrome:
+google-chrome --headless --screenshot=/tmp/output.png http://127.0.0.1:PORT/
+# Or verify with curl:
+curl -s http://127.0.0.1:PORT/ | grep '<h2>'
+```
+
 ## Best Practices
 
-1. **Zero config** — `brainstorm_start_session()` and `brainstorm-companion start` work with no arguments; sessions auto-isolate by working directory
-3. **Never restart to update content** — just call `push_screen` / `push` again; the browser auto-reloads
-4. **One start per workflow** — `start` reuses the existing session automatically
-5. **Push fragments, not full documents** — the frame template handles `<html>`, theming, and scroll
-6. **Start with a heading** — `<h2>` describes what the user is looking at
-7. **Add a `.subtitle`** — describes the decision being made
-8. **One decision per screen** — don't combine unrelated choices
-9. **Use slot labels** — `label` makes comparison tabs readable
-10. **Use `data-choice` for interaction** — the built-in `toggleSelect` emits events automatically
+1. **Zero config** — works with no arguments; sessions auto-isolate
+2. **Never restart to update content** — just call `push` again; the browser auto-reloads
+3. **Push HTML inline** — use `--html` or `push_screen({ html })`, don't create temp files
+4. **Push fragments, not full documents** — the frame template handles theming and scroll
+5. **Start with a heading** — `<h2>` describes what the user is looking at
+6. **One decision per screen** — don't combine unrelated choices
+7. **Use slot labels** — `label` makes comparison tabs readable
+8. **Use `data-choice` for interaction** — the built-in `toggleSelect` emits events automatically
+9. **Use `--wait` / `wait_seconds`** — gets user clicks automatically
 11. **Tell the user to interact** — after pushing content, let them know the browser is ready
 12. **Read events after user has time** — don't immediately read; wait for user to respond
 13. **Use `--timeout <min>` for auto-cleanup** — or call `stop` / `brainstorm_stop_session` when done

@@ -138,11 +138,19 @@ class McpServer {
         name: 'brainstorm_start_session',
         description: `Start a visual brainstorming session. Returns a URL for the user to view content you push.
 
-QUICKSTART (CLI is preferred — use Bash tool):
-  brainstorm-companion start --no-open          → starts server, prints URL
-  brainstorm-companion push --html "<h2>...</h2>" --slot a --label "Option A"
-  brainstorm-companion push --html "<h2>...</h2>" --slot b --label "Option B"
-  brainstorm-companion events --wait 120        → waits for user click, returns choice
+USE MCP TOOLS if available (you're reading this, so they are). Use CLI via Bash as fallback.
+
+QUICKSTART (MCP):
+  brainstorm_start_session()
+  brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
+  brainstorm_push_screen({ html: "...", slot: "b", label: "Option B" })
+  brainstorm_read_events({ wait_seconds: 120 })   → returns user's click
+  brainstorm_stop_session()
+
+CLI FALLBACK (if MCP tools fail or aren't available):
+  brainstorm-companion start --no-open &
+  brainstorm-companion push --html "..." --slot a --label "Option A"
+  brainstorm-companion events --wait 120
   brainstorm-companion stop
 
 OR via MCP tools:
@@ -151,12 +159,14 @@ OR via MCP tools:
   brainstorm_read_events({ wait_seconds: 120 })
   brainstorm_stop_session()
 
-IMPORTANT — after starting:
-  1. Tell the user to open the URL in their browser (it may not auto-open in VMs/containers)
-  2. Push content — browser auto-reloads
-  3. Use read_events with wait_seconds to get the user's click automatically
-  4. NEVER screenshot, curl, or try to verify the browser — the user sees it directly
-  5. NEVER create HTML files on disk — pass HTML inline to push_screen or push --html
+AFTER STARTING:
+  1. Tell the user the URL (may not auto-open in VMs/containers)
+  2. Push content — browser auto-reloads instantly
+  3. Use wait_seconds in read_events to get user's click automatically
+  4. Pass HTML inline — don't create temp files on disk
+  5. In VMs/containers: use --host 0.0.0.0 so user's browser can reach the server
+  6. You CAN use curl, screenshots, browser automation to verify content
+  7. If something fails, you CAN fall back from MCP tools to CLI or vice versa
 
 Each start is a clean slate. Within one MCP connection, subsequent calls reuse the session.
 
@@ -182,10 +192,9 @@ EVENTS: click (choice,text), preference (choice), tab-switch (slot), view-change
 RULES:
   - Use wait_seconds in read_events — the user's choice comes back automatically
   - NEVER restart to update — just push_screen again
-  - Push HTML inline to push_screen — do NOT create HTML files on disk
-  - Tell user the browser is ready after pushing
-  - NEVER screenshot, curl, or verify the browser — the user sees it directly
-  - NEVER use browser automation tools on the brainstorm URL
+  - Push HTML inline — don't create temp files on disk
+  - Tell user the URL after starting
+  - You CAN screenshot, curl, or use browser tools to verify content
   - Always stop_session when done`,
         inputSchema: {
           type: 'object',
