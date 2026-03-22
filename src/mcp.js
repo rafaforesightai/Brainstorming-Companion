@@ -16,6 +16,7 @@ class McpServer {
     this.serverInstance = null; // startServer() result
     this.buffer = '';           // stdin buffer
     this._pending = null;       // Promise of the in-flight tool call (for serialization)
+    this._cancelWait = null;    // Cancel function for pending read_events wait
   }
 
   start() {
@@ -80,51 +81,60 @@ class McpServer {
   }
 
   handleToolCall(id, params) {
-    // Serialize tool calls: each waits for the previous to finish. This ensures
-    // that brainstorm_start_session (async) responds before subsequent tools run.
-    const prev = this._pending || Promise.resolve();
-    const next = prev.then(() => {
-      const { name, arguments: args = {} } = params || {};
-      let resultOrPromise;
-      try {
-        switch (name) {
-          case 'brainstorm_start_session': resultOrPromise = this.toolStartSession(args); break;
-          case 'brainstorm_push_screen':  resultOrPromise = this.toolPushScreen(args);  break;
-          case 'brainstorm_read_events':  resultOrPromise = this.toolReadEvents(args);  break;
-          case 'brainstorm_clear_screen': resultOrPromise = this.toolClearScreen(args); break;
-          case 'brainstorm_stop_session': resultOrPromise = this.toolStopSession(args); break;
-          default:
-            this.respondError(id, -32602, `Unknown tool: ${name}`);
-            return;
-        }
-      } catch (err) {
-        this.respond(id, {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true
-        });
-        return;
+    const { name, arguments: args = {} } = params || {};
+
+    // Cancel any pending read_events wait so it doesn't block new calls
+    if (name !== 'brainstorm_read_events' && this._cancelWait) {
+      this._cancelWait();
+      this._cancelWait = null;
+    }
+
+    const sendResult = (result) => {
+      this.respond(id, {
+        content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }]
+      });
+    };
+    const sendError = (err) => {
+      this.respond(id, {
+        content: [{ type: 'text', text: `Error: ${err.message}` }],
+        isError: true
+      });
+    };
+
+    // Start session is async (waits for 'listening') — serialize it
+    if (name === 'brainstorm_start_session') {
+      const prev = this._pending || Promise.resolve();
+      const next = prev.then(() => {
+        try {
+          const result = this.toolStartSession(args);
+          if (result && typeof result.then === 'function') {
+            return result.then(sendResult).catch(sendError);
+          }
+          sendResult(result);
+        } catch (err) { sendError(err); }
+      });
+      this._pending = next.catch(() => {});
+      return;
+    }
+
+    // All other tools run immediately (no serialization)
+    try {
+      let result;
+      switch (name) {
+        case 'brainstorm_push_screen':  result = this.toolPushScreen(args);  break;
+        case 'brainstorm_read_events':  result = this.toolReadEvents(args);  break;
+        case 'brainstorm_clear_screen': result = this.toolClearScreen(args); break;
+        case 'brainstorm_stop_session': result = this.toolStopSession(args); break;
+        default:
+          this.respondError(id, -32602, `Unknown tool: ${name}`);
+          return;
       }
-
-      const sendResult = (result) => {
-        this.respond(id, {
-          content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }]
-        });
-      };
-      const sendError = (err) => {
-        this.respond(id, {
-          content: [{ type: 'text', text: `Error: ${err.message}` }],
-          isError: true
-        });
-      };
-
-      if (resultOrPromise && typeof resultOrPromise.then === 'function') {
-        return resultOrPromise.then(sendResult).catch(sendError);
+      if (result && typeof result.then === 'function') {
+        result.then(sendResult).catch(sendError);
       } else {
-        sendResult(resultOrPromise);
+        sendResult(result);
       }
-    });
-    // Track the tail of the chain; errors in earlier steps shouldn't block later ones
-    this._pending = next.catch(() => {});
+    } catch (err) { sendError(err); }
   }
 
   getToolDefinitions() {
@@ -133,19 +143,21 @@ class McpServer {
         name: 'brainstorm_start_session',
         description: `Start a visual brainstorming session. Opens a browser window where you push HTML and users interact visually.
 
-QUICKSTART — just these 3 calls:
-  brainstorm_start_session()                                          → opens browser
-  brainstorm_push_screen({ html: "<h2>Hello</h2><p>Content</p>" })   → shows content
-  brainstorm_stop_session()                                           → cleans up
+QUICKSTART — show content and get user's choice:
+  brainstorm_start_session()
+  brainstorm_push_screen({ html: "<h2>Pick one</h2>..." })
+  brainstorm_read_events({ wait_seconds: 120 })    → blocks until user clicks, returns choice
+  brainstorm_stop_session()
 
 FULL WORKFLOW:
-1. Call brainstorm_start_session ONCE (no args required — works immediately). Returns { url, session_dir }.
-2. Call brainstorm_push_screen with HTML — browser auto-reloads. Call as many times as needed.
-3. Call brainstorm_read_events to get user clicks/preferences.
-4. Call brainstorm_stop_session when done.
+1. brainstorm_start_session() — no args needed. Returns { url, session_dir }.
+2. brainstorm_push_screen({ html }) — browser auto-reloads. Call as many times as needed.
+3. brainstorm_read_events({ wait_seconds: 120 }) — BLOCKS until user interacts, then returns events automatically. No polling needed.
+4. brainstorm_stop_session() — clean up.
 
-If a session is already running, this returns the existing URL (safe to call repeatedly).
-Sessions persist until explicitly stopped — no timeout by default.
+KEY: Use wait_seconds in read_events so the user's click comes back to you automatically. No need to ask the user "what did you pick?" — the event arrives on its own.
+
+Safe to call start repeatedly — reuses existing session. Sessions persist until stopped.
 
 COMPARISON MODE: Push to slots a/b/c with labels for side-by-side view:
   brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
@@ -167,10 +179,10 @@ AUTO-DETECTED (CDN injected): class="mermaid" (diagrams), class="language-*" (sy
 EVENTS: click (choice,text), preference (choice), tab-switch (slot), view-change (mode)
 
 RULES:
+  - Use wait_seconds in read_events — the user's choice comes back automatically
   - NEVER restart to update — just push_screen again
   - Push HTML fragments, not full <html> documents
   - Tell user the browser is ready after pushing
-  - Give user time before reading events
   - Always stop_session when done`,
         inputSchema: {
           type: 'object',
@@ -208,14 +220,16 @@ Auto-detected: class="mermaid" (diagrams), class="language-*" (syntax highlighti
         name: 'brainstorm_read_events',
         description: `Read user interaction events from the brainstorm browser. Returns { events: [...], count: N }.
 
+RECOMMENDED: Use wait_seconds (e.g. 120) to block until the user clicks something. This way you get the result automatically — no need to poll or ask the user to confirm.
+
 Event types: click (data-choice element clicked — fields: choice, text, id), preference (slot comparison pick — fields: choice), tab-switch (tab changed — fields: slot), view-change (view toggled — fields: mode). All events include timestamp.
 
-Use clear_after_read: true between brainstorming rounds to avoid reading stale events from the previous round.
-Give the user time to interact before reading — don't read immediately after pushing content.`,
+Use clear_after_read: true between brainstorming rounds to avoid stale events.`,
         inputSchema: {
           type: 'object',
           properties: {
-            clear_after_read: { type: 'boolean', description: 'Clear events after reading to avoid stale data in next round (default: false)' }
+            wait_seconds: { type: 'number', description: 'Wait up to N seconds for an event to arrive before returning. Recommended: 120. If 0 or omitted, returns immediately.' },
+            clear_after_read: { type: 'boolean', description: 'Clear events after reading (default: false)' }
           }
         }
       },
@@ -319,24 +333,63 @@ Give the user time to interact before reading — don't read immediately after p
     if (!this.sessionDir) {
       return { events: [], count: 0 };
     }
-    const { clear_after_read = false } = args;
+    const { wait_seconds = 0, clear_after_read = false } = args;
     const eventsPath = path.join(this.sessionDir, '.events');
-    let events = [];
-    if (fs.existsSync(eventsPath)) {
+
+    const readEvents = () => {
+      if (!fs.existsSync(eventsPath)) return [];
       try {
         const raw = fs.readFileSync(eventsPath, 'utf8');
-        events = raw
-          .split('\n')
-          .filter(line => line.trim())
-          .map(line => JSON.parse(line));
+        return raw.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
       } catch {
-        events = [];
+        return [];
       }
+    };
+
+    const finish = (events) => {
+      if (clear_after_read) {
+        try { fs.writeFileSync(eventsPath, '', 'utf8'); } catch { /* ignore */ }
+      }
+      return { events, count: events.length };
+    };
+
+    // Immediate mode
+    if (!wait_seconds || wait_seconds <= 0) {
+      return finish(readEvents());
     }
-    if (clear_after_read) {
-      try { fs.writeFileSync(eventsPath, '', 'utf8'); } catch { /* ignore */ }
-    }
-    return { events, count: events.length };
+
+    // Wait mode — poll every 500ms until events arrive, cancelled, or timeout
+    const deadlineMs = wait_seconds * 1000;
+    const pollMs = 500;
+    return new Promise((resolve) => {
+      let cancelled = false;
+      let timer = null;
+
+      // Register cancel so other tool calls can interrupt this wait
+      this._cancelWait = () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+        resolve(finish(readEvents())); // return whatever we have so far
+      };
+
+      const startTime = Date.now();
+      const check = () => {
+        if (cancelled) return;
+        const events = readEvents();
+        if (events.length > 0) {
+          this._cancelWait = null;
+          resolve(finish(events));
+          return;
+        }
+        if (Date.now() - startTime >= deadlineMs) {
+          this._cancelWait = null;
+          resolve(finish([]));
+          return;
+        }
+        timer = setTimeout(check, pollMs);
+      };
+      check();
+    });
   }
 
   toolClearScreen(args) {

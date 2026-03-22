@@ -2,6 +2,8 @@
 
 This guide covers advanced usage patterns for the Brainstorm Companion tool.
 
+**See also:** [SKILL.md](./SKILL.md) for the complete agent reference (quickstart, MCP tools, workflow patterns, best practices). [README](https://www.npmjs.com/package/brainstorm-companion) for install, CLI reference, and MCP setup.
+
 ---
 
 ## When to Use Browser vs Terminal
@@ -137,14 +139,21 @@ Inline math with `$...$`, display math with `$$...$$`:
 
 ## Event Handling Patterns
 
-### Basic Polling
+### Automatic (Recommended)
 
-After pushing content, give the user time to interact, then read events:
+Use `wait_seconds` — the user's click comes back automatically. Non-blocking: you can still push content or stop the session while waiting.
 
 ```
 brainstorm_push_screen({ html: "..." })
-// ... wait for user to interact ...
-brainstorm_read_events()
+brainstorm_read_events({ wait_seconds: 120 })  // returns when user clicks
+```
+
+### Immediate
+
+Returns whatever events exist right now, without waiting:
+
+```
+brainstorm_read_events({})
 ```
 
 ### Clearing Events Between Rounds
@@ -152,7 +161,7 @@ brainstorm_read_events()
 When running multi-round comparisons, clear events between rounds to avoid stale data:
 
 ```
-brainstorm_read_events({ clear_after_read: true })  // read and clear in one call
+brainstorm_read_events({ wait_seconds: 120, clear_after_read: true })  // wait + clear
 brainstorm_clear_screen({})                          // clear content for next round
 brainstorm_push_screen({ html: "Round 2..." })       // push next round
 ```

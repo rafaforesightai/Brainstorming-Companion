@@ -122,6 +122,7 @@ Read user interaction events from the active brainstorm session.
 Events are generated when users click interactive elements in the browser.
 
 Options:
+  --wait <seconds>      Wait for an event to arrive (returns immediately when one does)
   --format <json|text>  Output format (default: json)
   --clear               Clear events after reading
   --project-dir <path>  Session storage location
@@ -134,9 +135,9 @@ Event Types:
   view-change User toggled view mode in comparison mode
 
 Examples:
-  brainstorm-companion events
-  brainstorm-companion events --format text --clear
-  brainstorm-companion events --session 1234-567890`,
+  brainstorm-companion events --wait 120           # wait for user click, return it
+  brainstorm-companion events                       # return events immediately
+  brainstorm-companion events --format text --clear`,
 
   clear: `Usage: brainstorm-companion clear [options]
 
@@ -414,12 +415,13 @@ async function push(argv) {
 // Command: events
 // ---------------------------------------------------------------------------
 
-function events(argv) {
+async function events(argv) {
   const { values } = parseArgs({
     args: argv,
     options: {
       'project-dir': { type: 'string' },
       'session':     { type: 'string' },
+      'wait':        { type: 'string' },
       'format':      { type: 'string', default: 'json' },
       'clear':       { type: 'boolean', default: false },
     },
@@ -428,11 +430,28 @@ function events(argv) {
 
   const projectDir = values['project-dir'] || null;
   const sessionId = values['session'] || null;
+  const waitSeconds = values['wait'] ? parseInt(values['wait'], 10) : 0;
   const format = values['format'];
   const doClear = values['clear'];
 
-  const { session } = getActiveOrExit(projectDir, sessionId);
-  const eventList = session.readEvents();
+  const { session, active } = getActiveOrExit(projectDir, sessionId);
+
+  let eventList;
+  if (waitSeconds > 0) {
+    // Poll until events arrive or timeout
+    const eventsPath = path.join(active.sessionDir, '.events');
+    const deadlineMs = waitSeconds * 1000;
+    const pollMs = 500;
+    const startTime = Date.now();
+    eventList = [];
+    while (Date.now() - startTime < deadlineMs) {
+      eventList = session.readEvents();
+      if (eventList.length > 0) break;
+      await sleep(pollMs);
+    }
+  } else {
+    eventList = session.readEvents();
+  }
 
   if (format === 'text') {
     if (eventList.length === 0) {
@@ -444,7 +463,6 @@ function events(argv) {
       }
     }
   } else {
-    // Default: json
     console.log(JSON.stringify(eventList, null, 2));
   }
 

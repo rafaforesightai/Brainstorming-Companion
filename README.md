@@ -232,7 +232,7 @@ graph TD
 |------|-------------|
 | `brainstorm_start_session` | Start server (or reuse existing). No args needed. Returns URL. |
 | `brainstorm_push_screen` | Push HTML content. Browser auto-reloads. Use `slot` + `label` for comparison. |
-| `brainstorm_read_events` | Read user interaction events. Option to clear after reading. |
+| `brainstorm_read_events` | Read user interactions. Use `wait_seconds: 120` to get clicks automatically. Never blocks other tools. |
 | `brainstorm_clear_screen` | Clear a specific slot or all content. |
 | `brainstorm_stop_session` | Stop server and clean up session files. |
 
@@ -245,10 +245,9 @@ graph TD
 ```
 1. brainstorm_start_session()
 2. brainstorm_push_screen({ html: "...options with data-choice..." })
-3. → Tell user to make their selection in the browser
-4. brainstorm_read_events({})
-5. → Use the choice to proceed
-6. brainstorm_stop_session({})
+3. brainstorm_read_events({ wait_seconds: 120 })   // returns when user clicks
+4. → User's choice arrives automatically
+5. brainstorm_stop_session()
 ```
 
 ### A/B/C Comparison
@@ -257,10 +256,9 @@ graph TD
 1. brainstorm_start_session()
 2. brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
 3. brainstorm_push_screen({ html: "...", slot: "b", label: "Option B" })
-4. → Tell user to compare and pick a preference
-5. brainstorm_read_events({})
-6. → Look for { type: "preference", choice: "a"|"b" }
-7. brainstorm_stop_session({})
+4. brainstorm_read_events({ wait_seconds: 120 })   // returns when user picks
+5. → { type: "preference", choice: "a"|"b" }
+6. brainstorm_stop_session()
 ```
 
 ### Multi-Round Brainstorming
@@ -343,10 +341,10 @@ Three input methods: file path, stdin (`-`), or inline (`--html`). Use `--slot` 
 ### `events`
 
 ```
-brainstorm-companion events [--format json|text] [--clear]
+brainstorm-companion events [--wait <seconds>] [--format json|text] [--clear]
 ```
 
-Returns JSON array of user interaction events. Event types: `click`, `preference`, `tab-switch`, `view-change`.
+Use `--wait 120` to wait for the user's click and return it automatically. Without `--wait`, returns immediately. Never blocks other operations. Event types: `click`, `preference`, `tab-switch`, `view-change`.
 
 ### `clear`
 
@@ -376,7 +374,7 @@ Shows Session ID, URL, uptime, event count, and active slots.
 2. `push` writes HTML files to the session directory; the file watcher detects changes and broadcasts reload to the browser via WebSocket
 3. The browser auto-reloads and renders content in a themed frame with click capture on `[data-choice]` elements
 4. Click events are sent over WebSocket to the server and appended to a `.events` JSONL file
-5. `events` reads the JSONL file and returns structured JSON
+5. `events` reads the JSONL file and returns structured JSON; with `wait_seconds`, it waits for the user's click and returns it automatically (non-blocking — other tools still work)
 6. Each session is fully isolated: own port, own directory, own event log
 7. Sessions are persistent — they stay alive until explicitly stopped with `stop` or `brainstorm_stop_session`
 

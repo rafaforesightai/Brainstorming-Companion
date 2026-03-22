@@ -5,15 +5,16 @@ description: Visual brainstorming companion — opens a browser window for compa
 
 # Brainstorm Companion — Complete Agent Reference
 
-## Quickstart (3 calls, no setup)
+## Quickstart (4 calls, no setup, user's choice comes back automatically)
 
 ```
 brainstorm_start_session()
-brainstorm_push_screen({ html: "<h2>Hello World</h2><p>Your content here</p>" })
+brainstorm_push_screen({ html: "<h2>Pick a layout</h2><div class='options'><div class='option' data-choice='grid' onclick='toggleSelect(this)'><div class='letter'>A</div><div class='content'><h3>Grid</h3></div></div><div class='option' data-choice='list' onclick='toggleSelect(this)'><div class='letter'>B</div><div class='content'><h3>List</h3></div></div></div>" })
+brainstorm_read_events({ wait_seconds: 120 })   // ← blocks until user clicks, returns their choice
 brainstorm_stop_session()
 ```
 
-That's it. No arguments required. A browser opens, your HTML appears, and cleanup happens automatically.
+No arguments required. Browser opens, content appears, user clicks, event returns to you automatically.
 
 ## When to Use
 
@@ -85,14 +86,22 @@ When slots are used, the browser switches to comparison mode with:
 
 ### brainstorm_read_events
 
-Read user interaction events (clicks, preferences).
+Read user interaction events. **Use `wait_seconds` to get the user's click automatically** — returns as soon as the user interacts.
+
+**Non-blocking:** If you call any other tool (push, clear, stop) while waiting, the wait is cancelled immediately and the new tool runs. You can always push updated content or stop the session — `wait_seconds` never blocks anything.
 
 ```
-brainstorm_read_events({ clear_after_read: false })
+// Recommended — waits for user's click, returns it automatically:
+brainstorm_read_events({ wait_seconds: 120 })
+→ { events: [{ type: "click", choice: "grid", text: "Grid Layout" }], count: 1 }
+
+// Immediate (returns whatever is available now):
+brainstorm_read_events({})
 → { events: [...], count: N }
 ```
 
 Set `clear_after_read: true` between brainstorming rounds to avoid stale events.
+If the user never clicks, returns `{ events: [], count: 0 }` after the timeout.
 
 ### brainstorm_clear_screen
 
@@ -346,10 +355,9 @@ All events include a `timestamp` field (Unix ms).
 ```
 1. brainstorm_start_session()
 2. brainstorm_push_screen({ html: "...options with data-choice..." })
-3. → Tell user to make their selection in the browser
-4. brainstorm_read_events({})
-5. → Use the choice to proceed
-6. brainstorm_stop_session({})
+3. brainstorm_read_events({ wait_seconds: 120 })   // blocks until user clicks
+4. → User's choice arrives automatically — use it to proceed
+5. brainstorm_stop_session()
 ```
 
 ### A/B/C Comparison
@@ -358,10 +366,9 @@ All events include a `timestamp` field (Unix ms).
 1. brainstorm_start_session()
 2. brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
 3. brainstorm_push_screen({ html: "...", slot: "b", label: "Option B" })
-4. → Tell user to compare and pick a preference
-5. brainstorm_read_events({})
-6. → Look for { type: "preference", choice: "a"|"b" }
-7. brainstorm_stop_session({})
+4. brainstorm_read_events({ wait_seconds: 120 })   // blocks until user picks preference
+5. → Look for { type: "preference", choice: "a"|"b" }
+6. brainstorm_stop_session()
 ```
 
 ### Multi-Round Brainstorming
@@ -372,15 +379,15 @@ All events include a `timestamp` field (Unix ms).
 // Round 1: Layout
 2. brainstorm_push_screen({ html: "...", slot: "a", label: "Grid" })
 3. brainstorm_push_screen({ html: "...", slot: "b", label: "List" })
-4. brainstorm_read_events({ clear_after_read: true })
-5. → User chose "Grid"
+4. brainstorm_read_events({ wait_seconds: 120, clear_after_read: true })
+5. → User chose "Grid" (returned automatically)
 
 // Round 2: Color scheme (clear old slots first)
 6. brainstorm_clear_screen({})
 7. brainstorm_push_screen({ html: "...", slot: "a", label: "Light" })
 8. brainstorm_push_screen({ html: "...", slot: "b", label: "Dark" })
-9. brainstorm_read_events({ clear_after_read: true })
-10. → User chose "Dark"
+9. brainstorm_read_events({ wait_seconds: 120, clear_after_read: true })
+10. → User chose "Dark" (returned automatically)
 
 // Show final summary
 11. brainstorm_push_screen({ html: "<h2>Decisions: Grid + Dark</h2>..." })
@@ -426,3 +433,13 @@ All events include a `timestamp` field (Unix ms).
 - **Pushing full HTML documents** — push fragments; the frame template adds theming and structure.
 - **Reading events immediately after push** — give the user time to interact first.
 - **Forgetting to stop** — always call `brainstorm_stop_session` when done, or use `idle_timeout_minutes`.
+
+---
+
+## Related Documentation
+
+For deeper reference beyond this skill file:
+
+- **[visual-companion.md](./visual-companion.md)** — Detailed usage guide: complete CSS class descriptions, all auto-detected library examples (Mermaid flowcharts/sequence/state, Prism languages, KaTeX math), event handling patterns, content design best practices, and a full multi-step brainstorming workflow walkthrough.
+- **[README](https://www.npmjs.com/package/brainstorm-companion)** — Install instructions, CLI reference with all flags, MCP setup for Claude Code, parallel instance usage, and architecture overview.
+- **CLI help** — Run `brainstorm-companion --help` or `brainstorm-companion <command> --help` for per-command documentation with examples and CSS class reference.
