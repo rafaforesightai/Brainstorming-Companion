@@ -199,7 +199,8 @@ Next steps:
   brainstorm-companion stop                                   Stop when done
 
 Install skill for AI agents (teaches CSS classes, workflows, best practices):
-  /install-skill $(npm root -g)/brainstorm-companion/skill/SKILL.md
+  Global:  /install-skill $(npm root -g)/brainstorm-companion/skill/SKILL.md
+  Local:   /install-skill ./node_modules/brainstorm-companion/skill/SKILL.md
 
 Docs: https://www.npmjs.com/package/brainstorm-companion
 Help: brainstorm-companion push --help`);

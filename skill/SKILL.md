@@ -441,5 +441,6 @@ All events include a `timestamp` field (Unix ms).
 For deeper reference beyond this skill file:
 
 - **[visual-companion.md](./visual-companion.md)** — Detailed usage guide: complete CSS class descriptions, all auto-detected library examples (Mermaid flowcharts/sequence/state, Prism languages, KaTeX math), event handling patterns, content design best practices, and a full multi-step brainstorming workflow walkthrough.
-- **[README](https://www.npmjs.com/package/brainstorm-companion)** — Install instructions, CLI reference with all flags, MCP setup for Claude Code, parallel instance usage, and architecture overview.
+- **[README](https://www.npmjs.com/package/brainstorm-companion)** — Install instructions (global, local, npx), CLI reference, MCP setup for any agent, parallel instances, and architecture overview.
 - **CLI help** — Run `brainstorm-companion --help` or `brainstorm-companion <command> --help` for per-command documentation with examples and CSS class reference.
+- **Install this skill** — Global: `/install-skill $(npm root -g)/brainstorm-companion/skill/SKILL.md` | Local: `/install-skill ./node_modules/brainstorm-companion/skill/SKILL.md`

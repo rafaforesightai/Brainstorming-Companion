@@ -12,6 +12,20 @@ Zero dependencies. Node.js >= 18 only.
 npm install -g brainstorm-companion
 ```
 
+If global install fails (permissions), use one of these alternatives:
+
+```bash
+# Option 1: Fix npm permissions (recommended)
+sudo npm install -g brainstorm-companion
+
+# Option 2: Install locally in your project
+npm install brainstorm-companion
+npx brainstorm-companion start
+
+# Option 3: Run directly without installing
+npx brainstorm-companion@latest start
+```
+
 ### MCP Setup (Claude Code, Cursor, Windsurf, or any MCP client)
 
 Two parts: the **MCP server** (gives the agent tools) and the **skill** (teaches the agent how to use them well).
@@ -41,21 +55,18 @@ This gives the agent 5 tools with full usage docs embedded in each description.
 
 The skill teaches the agent **when and how** to use the brainstorm tools — CSS classes, HTML patterns, workflow patterns, and best practices.
 
-Find the skill files path:
 ```bash
-echo "$(npm root -g)/brainstorm-companion/skill"
-```
-
-Then install the skill in Claude Code:
-```bash
-# In Claude Code, run:
+# If installed globally:
 /install-skill $(npm root -g)/brainstorm-companion/skill/SKILL.md
-```
 
-Or manually copy the skill into your project:
-```bash
+# If installed locally (in project):
+/install-skill ./node_modules/brainstorm-companion/skill/SKILL.md
+
+# Or manually copy into your project:
 mkdir -p .claude/skills
 cp "$(npm root -g)/brainstorm-companion/skill/"*.md .claude/skills/
+# or for local install:
+cp ./node_modules/brainstorm-companion/skill/*.md .claude/skills/
 ```
 
 #### Step 3: Restart your AI coding tool
