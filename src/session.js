@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const DEFAULT_BASE = path.join('/tmp', 'brainstorm-companion');
+const ACTIVE_POINTER = path.join(DEFAULT_BASE, '.active');
 
 class SessionManager {
   constructor(projectDir, targetSessionId) {
@@ -20,32 +21,63 @@ class SessionManager {
     return { sessionId, sessionDir };
   }
 
-  getActive(targetSessionId) {
-    if (!fs.existsSync(this.baseDir)) return null;
+  // Write a global pointer so any command can find the active session
+  // regardless of --project-dir
+  static writeActivePointer(sessionDir) {
+    try {
+      fs.mkdirSync(path.dirname(ACTIVE_POINTER), { recursive: true });
+      fs.writeFileSync(ACTIVE_POINTER, sessionDir, 'utf8');
+    } catch { /* ignore */ }
+  }
 
-    // If a specific session ID is requested, go directly to it
-    if (targetSessionId) {
-      const sessionDir = path.join(this.baseDir, targetSessionId);
+  static clearActivePointer() {
+    try { fs.rmSync(ACTIVE_POINTER); } catch { /* ignore */ }
+  }
+
+  // Read the global pointer — returns { sessionDir, serverInfo } or null
+  static readActivePointer() {
+    try {
+      if (!fs.existsSync(ACTIVE_POINTER)) return null;
+      const sessionDir = fs.readFileSync(ACTIVE_POINTER, 'utf8').trim();
       if (!fs.existsSync(sessionDir)) return null;
-      const serverInfoPath = path.join(sessionDir, '.server-info');
-      if (!fs.existsSync(serverInfoPath)) return null;
-      let serverInfo;
-      try {
-        const raw = fs.readFileSync(serverInfoPath, 'utf8');
-        serverInfo = JSON.parse(raw);
-      } catch {
-        return null;
-      }
+      const infoPath = path.join(sessionDir, '.server-info');
+      if (!fs.existsSync(infoPath)) return null;
+      const serverInfo = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
       const pid = serverInfo.pid || serverInfo.serverPid;
       if (pid) {
-        try { process.kill(pid, 0); } catch { return null; }
+        try { process.kill(pid, 0); } catch { return null; } // dead
       } else {
         return null;
       }
-      return { sessionId: targetSessionId, sessionDir, serverInfo };
+      const sessionId = path.basename(sessionDir);
+      return { sessionId, sessionDir, serverInfo };
+    } catch {
+      return null;
+    }
+  }
+
+  getActive(targetSessionId) {
+    // If a specific session ID is requested, search baseDir and pointer
+    if (targetSessionId) {
+      // Try baseDir first
+      const sessionDir = path.join(this.baseDir, targetSessionId);
+      if (fs.existsSync(sessionDir)) {
+        const result = this._checkSession(targetSessionId, sessionDir);
+        if (result) return result;
+      }
+      // Try global pointer
+      const pointer = SessionManager.readActivePointer();
+      if (pointer && pointer.sessionId === targetSessionId) return pointer;
+      return null;
     }
 
-    // No specific session — find most recent with live PID
+    // Try global pointer first (works regardless of --project-dir)
+    const pointer = SessionManager.readActivePointer();
+    if (pointer) return pointer;
+
+    // Fall back to scanning baseDir
+    if (!fs.existsSync(this.baseDir)) return null;
+
     let entries;
     try {
       entries = fs.readdirSync(this.baseDir, { withFileTypes: true });
@@ -60,41 +92,32 @@ class SessionManager {
       try {
         const stat = fs.statSync(sessionDir);
         sessions.push({ name: entry.name, sessionDir, mtime: stat.mtimeMs });
-      } catch {
-        // skip unreadable dirs
-      }
+      } catch { /* skip */ }
     }
 
-    // Sort most recent first
     sessions.sort((a, b) => b.mtime - a.mtime);
 
     for (const { name: sessionId, sessionDir } of sessions) {
-      const serverInfoPath = path.join(sessionDir, '.server-info');
-      if (!fs.existsSync(serverInfoPath)) continue;
-
-      let serverInfo;
-      try {
-        const raw = fs.readFileSync(serverInfoPath, 'utf8');
-        serverInfo = JSON.parse(raw);
-      } catch {
-        continue;
-      }
-
-      const pid = serverInfo.pid || serverInfo.serverPid;
-      if (pid) {
-        try {
-          process.kill(pid, 0);
-        } catch {
-          continue;
-        }
-      } else {
-        continue;
-      }
-
-      return { sessionId, sessionDir, serverInfo };
+      const result = this._checkSession(sessionId, sessionDir);
+      if (result) return result;
     }
 
     return null;
+  }
+
+  _checkSession(sessionId, sessionDir) {
+    const serverInfoPath = path.join(sessionDir, '.server-info');
+    if (!fs.existsSync(serverInfoPath)) return null;
+    let serverInfo;
+    try {
+      serverInfo = JSON.parse(fs.readFileSync(serverInfoPath, 'utf8'));
+    } catch {
+      return null;
+    }
+    const pid = serverInfo.pid || serverInfo.serverPid;
+    if (!pid) return null;
+    try { process.kill(pid, 0); } catch { return null; }
+    return { sessionId, sessionDir, serverInfo };
   }
 
   pushScreen(html, { slot, filename, label } = {}) {

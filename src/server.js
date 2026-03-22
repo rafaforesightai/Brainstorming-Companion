@@ -55,6 +55,16 @@ function wrapInFrame(content) {
   return frameTemplate.replace('<!-- CONTENT -->', content);
 }
 
+// Like wrapInFrame but strips the header and indicator bar (for iframes in comparison mode)
+function wrapInEmbed(content) {
+  let html = frameTemplate.replace('<!-- CONTENT -->', content);
+  // Remove header
+  html = html.replace(/<div class="header">[\s\S]*?<\/div>\s*<div class="main">/, '<div class="main">');
+  // Remove indicator bar (the actual HTML element, not the CSS)
+  html = html.replace(/\s*<div class="indicator-bar" id="indicator-bar">[\s\S]*?<\/div>\s*(?=<\/body>)/, '\n');
+  return html;
+}
+
 function getNewestScreen(screenDir) {
   let files;
   try {
@@ -256,7 +266,8 @@ function startServer(config = {}) {
         return;
       }
       const raw = fs.readFileSync(slotFile, 'utf-8');
-      let html = isFullDocument(raw) ? raw : wrapInFrame(raw);
+      // Slots are shown in iframes inside comparison page — skip the header/indicator
+      let html = isFullDocument(raw) ? raw : wrapInEmbed(raw);
       const slotNeeds = detectLibraries(html);
       const slotCdnTags = buildInjections(slotNeeds);
       if (slotCdnTags && html.includes('</head>')) {

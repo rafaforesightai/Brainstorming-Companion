@@ -1,7 +1,7 @@
 'use strict';
 
 const { parseArgs } = require('node:util');
-const { exec, spawn } = require('node:child_process');
+const { exec } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { SessionManager } = require('./session');
@@ -57,17 +57,20 @@ Key concepts:
 
 Start the brainstorm server and open a browser window.
 
-Always creates a fresh session with a clean slate — no leftover content from
-previous runs. Stops any existing session automatically.
+Always creates a fresh session with a clean slate — no leftover content.
+Stops any existing session automatically. Server runs in foreground (stays
+alive as long as this process runs).
 
-Use --reuse to keep an existing session instead.
+In Claude Code: run with run_in_background so it stays alive while you push content.
+In terminal: run in one tab, push from another. Ctrl+C to stop.
+
+Use --reuse to keep an existing session instead of starting fresh.
 
 Options:
   --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
   --port <number>       Bind to specific port (default: random ephemeral)
   --host <address>      Bind address (default: 127.0.0.1)
   --timeout <minutes>   Auto-stop after N minutes of inactivity (default: none)
-  --foreground          Run server in foreground (don't background)
   --no-open             Don't auto-open browser
   --reuse               Reuse existing session if one is running (keep its content)
 
@@ -206,23 +209,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function pollForServerInfo(sessionDir, timeoutMs = 5000, intervalMs = 100) {
-  const serverInfoPath = path.join(sessionDir, '.server-info');
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (fs.existsSync(serverInfoPath)) {
-      try {
-        const raw = fs.readFileSync(serverInfoPath, 'utf8');
-        const info = JSON.parse(raw);
-        if (info.url) return info;
-      } catch {
-        // file may be partially written, retry
-      }
-    }
-    await sleep(intervalMs);
-  }
-  return null;
-}
 
 function openBrowser(url) {
   const platform = process.platform;
@@ -265,7 +251,6 @@ async function start(argv) {
       'port':        { type: 'string', default: '0' },
       'host':        { type: 'string', default: '127.0.0.1' },
       'timeout':     { type: 'string' },
-      'foreground':  { type: 'boolean', default: false },
       'no-open':     { type: 'boolean', default: false },
       'reuse':       { type: 'boolean', default: false },
     },
@@ -277,7 +262,6 @@ async function start(argv) {
   const port = parseInt(values['port'], 10) || 0;
   const timeoutMin = values['timeout'] ? parseInt(values['timeout'], 10) : 0;
   const idleTimeoutMs = timeoutMin > 0 ? timeoutMin * 60 * 1000 : 0;
-  const foreground = values['foreground'];
   const noOpen = values['no-open'];
   const reuse = values['reuse'];
 
@@ -310,71 +294,46 @@ async function start(argv) {
 
   const { sessionDir } = session.create();
 
-  if (foreground) {
-    // Run server in-process
-    const { startServer } = require('./server');
-    const instance = startServer({
-      screenDir: sessionDir,
-      host,
-      port,
-      ownerPid: process.pid,
-      idleTimeoutMs,
-    });
+  // Run server in-process (foreground) — this is the only reliable mode
+  // across all environments (Claude Code, Codex, Docker, terminals).
+  // The calling process must stay alive (use run_in_background in Claude Code).
+  const { startServer } = require('./server');
+  const instance = startServer({
+    screenDir: sessionDir,
+    host,
+    port,
+    ownerPid: process.pid,
+    idleTimeoutMs,
+  });
 
-    instance.server.once('listening', () => {
-      console.log(`Server started: ${instance.url}`);
-      console.log(`Session ID: ${path.basename(sessionDir)}`);
-      printNextSteps();
-      if (!noOpen) {
-        openBrowser(instance.url);
-      }
-    });
+  instance.server.once('listening', () => {
+    // Write global pointer so push/events/stop find this session
+    SessionManager.writeActivePointer(sessionDir);
 
-    instance.server.once('error', (err) => {
-      console.error(`Server error: ${err.message}`);
-      process.exit(1);
-    });
-
-    // Keep process alive
-    process.on('SIGINT', () => {
-      instance.shutdown('sigint');
-      process.exit(0);
-    });
-    process.on('SIGTERM', () => {
-      instance.shutdown('sigterm');
-      process.exit(0);
-    });
-  } else {
-    // Background the server
-    const serverScript = path.join(__dirname, 'server.js');
-    const child = spawn(process.execPath, [serverScript], {
-      detached: true,
-      stdio: 'ignore',
-      env: {
-        ...process.env,
-        BRAINSTORM_DIR: sessionDir,
-        BRAINSTORM_HOST: host,
-        BRAINSTORM_PORT: String(port),
-        BRAINSTORM_IDLE_TIMEOUT: String(idleTimeoutMs),
-      },
-    });
-    child.unref();
-
-    // Poll for .server-info
-    const serverInfo = await pollForServerInfo(sessionDir, 5000, 100);
-    if (!serverInfo) {
-      console.error('Timed out waiting for server to start.');
-      process.exit(1);
-    }
-
-    console.log(`Server started: ${serverInfo.url}`);
+    console.log(`Server started: ${instance.url}`);
     console.log(`Session ID: ${path.basename(sessionDir)}`);
     printNextSteps();
-
     if (!noOpen) {
-      openBrowser(serverInfo.url);
+      openBrowser(instance.url);
     }
-  }
+  });
+
+  instance.server.once('error', (err) => {
+    console.error(`Server error: ${err.message}`);
+    process.exit(1);
+  });
+
+  // Clean up on exit
+  const cleanup = (reason) => {
+    SessionManager.clearActivePointer();
+    instance.shutdown(reason);
+    process.exit(0);
+  };
+  process.on('SIGINT', () => cleanup('sigint'));
+  process.on('SIGTERM', () => cleanup('sigterm'));
+  process.on('exit', () => {
+    SessionManager.clearActivePointer();
+  });
 }
 
 // ---------------------------------------------------------------------------

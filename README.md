@@ -12,13 +12,13 @@ Zero dependencies. Node.js >= 18 only.
 npm install -g brainstorm-companion
 ```
 
-### Claude Code Setup
+### MCP Setup (Claude Code, Cursor, Windsurf, or any MCP client)
 
 Two parts: the **MCP server** (gives the agent tools) and the **skill** (teaches the agent how to use them well).
 
 #### Step 1: MCP Server
 
-Add to `~/.claude/.mcp.json` (create the file if it doesn't exist):
+**Claude Code:** Add to `~/.claude/.mcp.json` (create the file if it doesn't exist):
 
 ```json
 {
@@ -31,19 +31,11 @@ Add to `~/.claude/.mcp.json` (create the file if it doesn't exist):
 }
 ```
 
-This gives the agent 5 tools: `brainstorm_start_session`, `brainstorm_push_screen`, `brainstorm_read_events`, `brainstorm_clear_screen`, `brainstorm_stop_session`. Full usage docs are embedded in each tool description.
+**Other MCP clients (Cursor, Windsurf, etc.):** Use the same config format your client expects. The MCP server command is `brainstorm-companion --mcp` (stdio JSON-RPC).
 
-**Alternative (no global install):** Use `npx` instead:
-```json
-{
-  "mcpServers": {
-    "brainstorm": {
-      "command": "npx",
-      "args": ["brainstorm-companion@latest", "--mcp"]
-    }
-  }
-}
-```
+This gives the agent 5 tools with full usage docs embedded in each description.
+
+**Alternative (no global install):** Use `npx` instead — replace `"command": "brainstorm-companion"` with `"command": "npx"` and `"args": ["brainstorm-companion@latest", "--mcp"]`.
 
 #### Step 2: Skill (optional but recommended)
 
@@ -66,9 +58,9 @@ mkdir -p .claude/skills
 cp "$(npm root -g)/brainstorm-companion/skill/"*.md .claude/skills/
 ```
 
-#### Step 3: Restart Claude Code
+#### Step 3: Restart your AI coding tool
 
-Restart Claude Code for the MCP server and skill to take effect.
+Restart Claude Code / Cursor / your MCP client for the server and skill to take effect.
 
 ---
 
@@ -360,10 +352,10 @@ Global Options:
 ### `start`
 
 ```
-brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--timeout <min>] [--foreground] [--no-open] [--reuse]
+brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--timeout <min>] [--no-open] [--reuse]
 ```
 
-Always creates a fresh session with a clean slate. Stops any existing session automatically. Use `--reuse` to keep an existing session and its content. Use `--timeout 30` for auto-cleanup after 30 minutes idle.
+Always creates a fresh session with a clean slate. Server runs in foreground — stays alive as long as the process runs. In Claude Code, use `run_in_background` so the server stays alive while you push content. Use `--reuse` to keep an existing session. Use `--timeout 30` for auto-cleanup.
 
 ### `push`
 
@@ -405,7 +397,7 @@ Shows Session ID, URL, uptime, event count, and active slots.
 
 ## How It Works
 
-1. `start` checks for an existing active session — reuses it if found, otherwise creates a new one with its own port and directory
+1. `start` creates a fresh session with its own port, directory, and server process (foreground — stays alive as long as the process runs)
 2. `push` writes HTML files to the session directory; the file watcher detects changes and broadcasts reload to the browser via WebSocket
 3. The browser auto-reloads and renders content in a themed frame with click capture on `[data-choice]` elements
 4. Click events are sent over WebSocket to the server and appended to a `.events` JSONL file
