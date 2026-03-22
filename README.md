@@ -12,7 +12,11 @@ Zero dependencies. Node.js >= 18 only.
 npm install -g brainstorm-companion
 ```
 
-### Claude Code MCP Setup
+### Claude Code Setup
+
+Two parts: the **MCP server** (gives the agent tools) and the **skill** (teaches the agent how to use them well).
+
+#### Step 1: MCP Server
 
 Add to `~/.claude/.mcp.json` (create the file if it doesn't exist):
 
@@ -27,7 +31,7 @@ Add to `~/.claude/.mcp.json` (create the file if it doesn't exist):
 }
 ```
 
-Then restart Claude Code. The agent gets 5 tools (`brainstorm_start_session`, `brainstorm_push_screen`, `brainstorm_read_events`, `brainstorm_clear_screen`, `brainstorm_stop_session`) with full usage docs embedded — it knows how to use them immediately.
+This gives the agent 5 tools: `brainstorm_start_session`, `brainstorm_push_screen`, `brainstorm_read_events`, `brainstorm_clear_screen`, `brainstorm_stop_session`. Full usage docs are embedded in each tool description.
 
 **Alternative (no global install):** Use `npx` instead:
 ```json
@@ -40,6 +44,31 @@ Then restart Claude Code. The agent gets 5 tools (`brainstorm_start_session`, `b
   }
 }
 ```
+
+#### Step 2: Skill (optional but recommended)
+
+The skill teaches the agent **when and how** to use the brainstorm tools — CSS classes, HTML patterns, workflow patterns, and best practices.
+
+Find the skill files path:
+```bash
+echo "$(npm root -g)/brainstorm-companion/skill"
+```
+
+Then install the skill in Claude Code:
+```bash
+# In Claude Code, run:
+/install-skill $(npm root -g)/brainstorm-companion/skill/SKILL.md
+```
+
+Or manually copy the skill into your project:
+```bash
+mkdir -p .claude/skills
+cp "$(npm root -g)/brainstorm-companion/skill/"*.md .claude/skills/
+```
+
+#### Step 3: Restart Claude Code
+
+Restart Claude Code for the MCP server and skill to take effect.
 
 ---
 

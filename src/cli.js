@@ -192,10 +192,14 @@ Next steps:
   brainstorm-companion push --html '<h2>Your content</h2>'   Push content to browser
   brainstorm-companion push file.html --slot a --label "A"   Comparison mode
   brainstorm-companion events                                 Read user interactions
+  brainstorm-companion events --wait 120                      Wait for user's click
   brainstorm-companion stop                                   Stop when done
 
-Full docs: https://www.npmjs.com/package/brainstorm-companion
-Run: brainstorm-companion push --help    for all CSS classes and options`);
+Install skill for AI agents (teaches CSS classes, workflows, best practices):
+  /install-skill $(npm root -g)/brainstorm-companion/skill/SKILL.md
+
+Docs: https://www.npmjs.com/package/brainstorm-companion
+Help: brainstorm-companion push --help`);
 }
 
 function sleep(ms) {
