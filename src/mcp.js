@@ -136,23 +136,29 @@ class McpServer {
     return [
       {
         name: 'brainstorm_start_session',
-        description: `Start a visual brainstorming session. Opens a browser window where you push HTML and users interact visually.
+        description: `Start a visual brainstorming session. Returns a URL for the user to view content you push.
 
-QUICKSTART — show content and get user's choice:
+QUICKSTART (CLI is preferred — use Bash tool):
+  brainstorm-companion start --no-open          → starts server, prints URL
+  brainstorm-companion push --html "<h2>...</h2>" --slot a --label "Option A"
+  brainstorm-companion push --html "<h2>...</h2>" --slot b --label "Option B"
+  brainstorm-companion events --wait 120        → waits for user click, returns choice
+  brainstorm-companion stop
+
+OR via MCP tools:
   brainstorm_start_session()
-  brainstorm_push_screen({ html: "<h2>Pick one</h2>..." })
-  brainstorm_read_events({ wait_seconds: 120 })    → blocks until user clicks, returns choice
+  brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
+  brainstorm_read_events({ wait_seconds: 120 })
   brainstorm_stop_session()
 
-FULL WORKFLOW:
-1. brainstorm_start_session() — no args needed. Returns { url, session_dir }.
-2. brainstorm_push_screen({ html }) — browser auto-reloads. Call as many times as needed.
-3. brainstorm_read_events({ wait_seconds: 120 }) — BLOCKS until user interacts, then returns events automatically. No polling needed.
-4. brainstorm_stop_session() — clean up.
+IMPORTANT — after starting:
+  1. Tell the user to open the URL in their browser (it may not auto-open in VMs/containers)
+  2. Push content — browser auto-reloads
+  3. Use read_events with wait_seconds to get the user's click automatically
+  4. NEVER screenshot, curl, or try to verify the browser — the user sees it directly
+  5. NEVER create HTML files on disk — pass HTML inline to push_screen or push --html
 
-KEY: Use wait_seconds in read_events so the user's click comes back to you automatically. No need to ask the user "what did you pick?" — the event arrives on its own.
-
-Each start is a clean slate — no leftover content. Within one MCP connection, subsequent calls return the existing session. Sessions persist until stopped.
+Each start is a clean slate. Within one MCP connection, subsequent calls reuse the session.
 
 COMPARISON MODE: Push to slots a/b/c with labels for side-by-side view:
   brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
@@ -176,8 +182,10 @@ EVENTS: click (choice,text), preference (choice), tab-switch (slot), view-change
 RULES:
   - Use wait_seconds in read_events — the user's choice comes back automatically
   - NEVER restart to update — just push_screen again
-  - Push HTML fragments, not full <html> documents
+  - Push HTML inline to push_screen — do NOT create HTML files on disk
   - Tell user the browser is ready after pushing
+  - NEVER screenshot, curl, or verify the browser — the user sees it directly
+  - NEVER use browser automation tools on the brainstorm URL
   - Always stop_session when done`,
         inputSchema: {
           type: 'object',

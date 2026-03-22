@@ -5,16 +5,33 @@ description: Visual brainstorming companion — opens a browser window for compa
 
 # Brainstorm Companion — Complete Agent Reference
 
-## Quickstart (4 calls, no setup, user's choice comes back automatically)
+## Quickstart — CLI (preferred, works everywhere including VMs)
+
+The server runs in foreground — run `start` in background so you can push content from other commands.
+
+```bash
+brainstorm-companion start --no-open &                          # start in background
+# → Tell user: "Open http://127.0.0.1:XXXXX in your browser"
+brainstorm-companion push --html '<h2>Option A</h2>' --slot a --label "Design A"
+brainstorm-companion push --html '<h2>Option B</h2>' --slot b --label "Design B"
+brainstorm-companion events --wait 120                          # waits for user click
+brainstorm-companion stop
+```
+
+In Claude Code, use `run_in_background: true` for the start command.
+
+## Quickstart — MCP Tools (alternative)
 
 ```
 brainstorm_start_session()
-brainstorm_push_screen({ html: "<h2>Pick a layout</h2><div class='options'><div class='option' data-choice='grid' onclick='toggleSelect(this)'><div class='letter'>A</div><div class='content'><h3>Grid</h3></div></div><div class='option' data-choice='list' onclick='toggleSelect(this)'><div class='letter'>B</div><div class='content'><h3>List</h3></div></div></div>" })
-brainstorm_read_events({ wait_seconds: 120 })   // ← blocks until user clicks, returns their choice
+brainstorm_push_screen({ html: "<h2>Option A</h2>...", slot: "a", label: "Design A" })
+brainstorm_push_screen({ html: "<h2>Option B</h2>...", slot: "b", label: "Design B" })
+brainstorm_read_events({ wait_seconds: 120 })
 brainstorm_stop_session()
 ```
 
-No arguments required. Browser opens, content appears, user clicks, event returns to you automatically.
+**After starting, ALWAYS tell the user the URL** so they can open it in their browser.
+The browser may not auto-open in VMs, containers, or remote environments.
 
 ## When to Use
 
@@ -414,18 +431,18 @@ All events include a `timestamp` field (Unix ms).
 
 ## Best Practices
 
-1. **Zero config** — `brainstorm_start_session()` works with no arguments; isolation is automatic
-3. **Never restart to update content** — just call `brainstorm_push_screen` again; the browser auto-reloads
-4. **One `brainstorm_start_session` per workflow** — within MCP, subsequent calls reuse the session
-5. **Push fragments, not full documents** — the frame template handles `<html>`, theming, and scroll
-6. **Start with a heading** — `<h2>` describes what the user is looking at
-7. **Add a `.subtitle`** — describes the decision being made
+1. **Zero config** — works with no arguments; isolation is automatic
+2. **Always tell the user the URL** — the browser may not auto-open in VMs/containers
+3. **Never restart to update content** — just call `push_screen` / `push --html` again
+4. **One start per workflow** — within MCP, subsequent calls reuse the session
+5. **Push HTML inline, not files** — pass HTML directly, don't create temp files
+6. **Push fragments, not full documents** — the frame template handles theming and scroll
+7. **Start with `<h2>` heading + `.subtitle`** — describes what the user is looking at
 8. **One decision per screen** — don't combine unrelated choices
 9. **Use slot labels** — `label` makes comparison tabs readable
 10. **Use `data-choice` for interaction** — the built-in `toggleSelect` emits events automatically
-11. **Tell the user to interact** — after pushing content, let them know the browser is ready
-12. **Read events after user has time** — don't immediately read; wait for user to respond
-13. **Clean up with `brainstorm_stop_session`** — or use `idle_timeout_minutes` for auto-cleanup
+11. **Use `wait_seconds` in events** — the user's click returns automatically
+12. **Clean up with `stop`** — or use `--timeout` / `idle_timeout_minutes` for auto-cleanup
 
 ## Common Mistakes
 
@@ -433,6 +450,26 @@ All events include a `timestamp` field (Unix ms).
 - **Pushing full HTML documents** — push fragments; the frame template adds theming and structure.
 - **Reading events immediately after push** — give the user time to interact first.
 - **Forgetting to stop** — always call `brainstorm_stop_session` when done, or use `idle_timeout_minutes`.
+- **Trying to screenshot, scrape, or verify the browser content** — DON'T. The browser is for the USER to see. Just push content and tell the user it's ready. Never use browser automation, screenshots, curl, or other tools to check the brainstorm browser. The user sees it directly.
+- **Creating HTML files on disk then trying to serve them** — DON'T. Pass HTML directly to `brainstorm_push_screen({ html: "..." })`. No temp files needed.
+- **Trying to access localhost from a VM or container** — The server runs locally. The user's browser opens it automatically. Don't try to proxy, tunnel, or access it from other machines.
+
+## What NOT to Do
+
+The brainstorm companion is a **push-and-forget visual tool**. Your job is:
+1. Start the server and tell the user the URL
+2. Push HTML content (inline, not files)
+3. Read events when the user interacts
+
+You should NEVER:
+- Take screenshots of the browser
+- Use browser automation tools (Chrome DevTools, Puppeteer, etc.) to verify content
+- Create HTML files on disk — pass HTML inline to `push --html` or `push_screen`
+- Use curl/fetch/wget to check what's being served
+- Try to access the URL yourself — it's for the user's browser only
+- Try to proxy, tunnel, or forward the port to another machine
+- Worry about whether the user can see it — just tell them the URL
+- Go in circles if something doesn't work — just give the user the URL and instructions
 
 ---
 
