@@ -4,7 +4,7 @@ Visual brainstorming tool for AI coding sessions. Opens a browser window where a
 
 Zero dependencies. Node.js >= 18 only.
 
-**Sessions are persistent** — they never time out. Sessions stay alive until you explicitly stop them with `stop` or `brainstorm_stop_session`.
+**Sessions are persistent** — they stay alive until you explicitly stop them with `stop` or `brainstorm_stop_session`. Use `--timeout <minutes>` if you want auto-cleanup.
 
 ## Install
 
@@ -39,34 +39,44 @@ Once configured, the agent has access to 5 tools: `brainstorm_start_session`, `b
 
 ## Complete Usage Guide
 
-### Quick Start (CLI)
+### Quick Start (CLI) — 3 commands, zero config
 
 ```bash
-# 1. Start server (opens browser automatically)
-brainstorm-companion start --project-dir .
+brainstorm-companion start                                    # opens browser
+brainstorm-companion push --html '<h2>Hello World</h2>'       # shows content
+brainstorm-companion stop                                     # cleans up
+```
+
+That's it. No arguments required. Now a fuller example:
+
+```bash
+# Start (opens browser, prints URL)
+brainstorm-companion start
 # → Server started: http://127.0.0.1:54321
-# → Session ID: 1234-1700000000000
 
-# 2. Push content — browser updates instantly
-brainstorm-companion push --html '<h2>Dashboard Layout</h2><div class="options"><div class="option" data-choice="grid" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>Grid Layout</h3><p>Cards in a responsive grid</p></div></div><div class="option" data-choice="list" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>List Layout</h3><p>Vertical scrolling list</p></div></div></div>'
+# Push content — browser updates instantly
+brainstorm-companion push --html '<h2>Dashboard</h2><p>First draft</p>'
 
-# 3. Update content — same browser, no restart needed
-brainstorm-companion push --html '<h2>Updated Layout</h2><p>Refined version based on feedback</p>'
+# Update — same browser, auto-reloads
+brainstorm-companion push --html '<h2>Dashboard v2</h2><p>Refined</p>'
 
-# 4. Read user's selection
+# Read what user clicked
 brainstorm-companion events
-# → [{"type":"click","choice":"grid","text":"A Grid Layout Cards in a responsive grid","timestamp":1700000001234}]
 
-# 5. Stop when done
+# Done
 brainstorm-companion stop
 ```
 
-**Key behavior:** Calling `start` when a session is already running reuses it — no duplicate browsers. Just keep calling `push` to update the same window. The browser auto-reloads on every push.
+**Key behaviors:**
+- `start` with no args works immediately (stores in `/tmp/brainstorm-companion/`)
+- `start` reuses an existing session — never opens duplicate browsers
+- `push` auto-reloads the browser every time — no restart or refresh needed
+- Add `--project-dir .` for project-local storage
 
-### Quick Start (MCP / Agent)
+### Quick Start (MCP / Agent) — 3 calls, zero config
 
 ```
-1. brainstorm_start_session({ project_dir: "/path/to/project" })
+1. brainstorm_start_session()
    → { url: "http://127.0.0.1:54321", session_dir: "..." }
 
 2. brainstorm_push_screen({ html: "<h2>Option A</h2>...", slot: "a", label: "Minimal" })
@@ -80,7 +90,7 @@ brainstorm-companion stop
 5. brainstorm_stop_session({})
 ```
 
-**Important:** Call `brainstorm_start_session` once. It returns the existing session if already running. Update content by calling `brainstorm_push_screen` repeatedly — the browser auto-reloads each time. Sessions never time out.
+**No arguments required.** `brainstorm_start_session()` works with zero config. Pass `project_dir` for project-local storage or when multiple agents run simultaneously. Sessions persist until `brainstorm_stop_session()` — use `idle_timeout_minutes` for auto-cleanup.
 
 ---
 
@@ -318,10 +328,10 @@ Global Options:
 ### `start`
 
 ```
-brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--foreground] [--no-open] [--new]
+brainstorm-companion start [--project-dir <path>] [--port <N>] [--host <H>] [--timeout <min>] [--foreground] [--no-open] [--new]
 ```
 
-If a session is already running, prints its URL and reuses it. Use `--new` to force a separate parallel session.
+If a session is already running, prints its URL and reuses it. Use `--new` to force a separate parallel session. Use `--timeout 30` for auto-cleanup after 30 minutes idle (default: no timeout).
 
 ### `push`
 

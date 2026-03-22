@@ -5,24 +5,32 @@ description: Visual brainstorming companion — opens a browser window for compa
 
 # Brainstorm Companion — Complete Agent Reference
 
+## Quickstart (3 calls, no setup)
+
+```
+brainstorm_start_session()
+brainstorm_push_screen({ html: "<h2>Hello World</h2><p>Your content here</p>" })
+brainstorm_stop_session()
+```
+
+That's it. No arguments required. A browser opens, your HTML appears, and cleanup happens automatically.
+
 ## When to Use
 
-Use this tool when you need to:
-- Show visual mockups, UI designs, or layout options to the user
-- Compare multiple design alternatives side-by-side (A/B/C comparison)
+- Show visual mockups, UI designs, or layout options
+- Compare design alternatives side-by-side (A/B/C)
 - Present architecture diagrams (Mermaid), code samples (Prism), or math (KaTeX)
-- Get visual feedback — user clicks and preferences are captured as events
-- Show interactive prototypes or wireframes
+- Get visual feedback — user clicks and preferences captured as events
 
-**Don't use** for plain text output, simple data, or anything that works fine in the terminal.
+**Don't use** for plain text, simple data, or anything fine in the terminal.
 
 ## Session Lifecycle
 
-Sessions are **persistent** — they never time out. A session stays alive until explicitly stopped via `brainstorm_stop_session`. This means:
-- No 30-minute idle timeout
-- Sessions survive long user breaks
-- You only need to start once per workflow
-- Always clean up with `brainstorm_stop_session` when done
+- **No setup needed** — `brainstorm_start_session()` works with zero arguments
+- **Sessions are persistent** — they stay alive until you call `brainstorm_stop_session`
+- **Safe to call start multiple times** — reuses existing session, never duplicates
+- **Optional timeout** — pass `idle_timeout_minutes` for auto-cleanup
+- **Always stop when done** — `brainstorm_stop_session()` frees port and cleans up
 
 ---
 
@@ -30,20 +38,24 @@ Sessions are **persistent** — they never time out. A session stays alive until
 
 ### brainstorm_start_session
 
-Start the server and open a browser window. If a session is already running, it reuses it — no duplicate browsers.
+Start the server and open a browser. Works with no arguments. Reuses existing session if one is running.
 
 ```
-brainstorm_start_session({
-  project_dir: "/path/to/project",  // ALWAYS pass this — use the current working directory
-  open_browser: true,                // default: true
-  port: 0                            // default: random
-})
+// Simplest — no args needed:
+brainstorm_start_session()
 → { url: "http://127.0.0.1:54321", session_dir: "..." }
+
+// With options:
+brainstorm_start_session({
+  project_dir: "/path/to/project",  // optional — use cwd for project-local storage
+  open_browser: true,                // default: true
+  idle_timeout_minutes: 0            // default: 0 = no timeout. Set 30 for auto-cleanup.
+})
 ```
 
-**Always pass `project_dir`** — this keeps session files with the project and avoids conflicts between agents. Without it, all sessions go to `/tmp/brainstorm-companion/` and may collide.
+**`project_dir` is optional.** Without it, sessions go to `/tmp/brainstorm-companion/`. Pass the current working directory for project-local storage or when multiple agents may run simultaneously.
 
-**Calling `brainstorm_start_session` multiple times is safe** — it returns the existing session URL if one is already running. You do NOT need to stop and restart to update content. Just call `brainstorm_push_screen` to update the same browser window.
+**Calling it multiple times is safe** — returns the existing session. Just call `brainstorm_push_screen` to update content.
 
 ### brainstorm_push_screen
 

@@ -50,7 +50,7 @@ class McpServer {
         this.respond(id, {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'brainstorm-companion', version: '2.0.0' }
+          serverInfo: { name: 'brainstorm-companion', version: '2.0.1' }
         });
         break;
 
@@ -126,67 +126,54 @@ class McpServer {
     return [
       {
         name: 'brainstorm_start_session',
-        description: `Start a visual brainstorming session — opens a browser window where you push HTML content and the user interacts visually. Returns the session URL. Sessions have NO timeout and persist until explicitly stopped.
+        description: `Start a visual brainstorming session. Opens a browser window where you push HTML and users interact visually.
 
-COMPLETE USAGE GUIDE:
-1. Call brainstorm_start_session ONCE with project_dir set to the current working directory. It returns { url, session_dir }.
-2. Call brainstorm_push_screen to send HTML content — the browser auto-reloads instantly. Call it as many times as needed to update content without restarting.
-3. Call brainstorm_read_events to get user clicks/preferences. Use clear_after_read:true between rounds.
-4. Call brainstorm_stop_session when done to free the port and clean up.
+QUICKSTART — just these 3 calls:
+  brainstorm_start_session()                                          → opens browser
+  brainstorm_push_screen({ html: "<h2>Hello</h2><p>Content</p>" })   → shows content
+  brainstorm_stop_session()                                           → cleans up
 
-SINGLE SCREEN MODE: Push HTML fragments (not full documents). The frame template wraps content with themed CSS (auto light/dark mode).
+FULL WORKFLOW:
+1. Call brainstorm_start_session ONCE (no args required — works immediately). Returns { url, session_dir }.
+2. Call brainstorm_push_screen with HTML — browser auto-reloads. Call as many times as needed.
+3. Call brainstorm_read_events to get user clicks/preferences.
+4. Call brainstorm_stop_session when done.
 
-COMPARISON MODE: Push to slots a/b/c with labels for side-by-side comparison with tabs and preference buttons.
+If a session is already running, this returns the existing URL (safe to call repeatedly).
+Sessions persist until explicitly stopped — no timeout by default.
 
-BUILT-IN CSS CLASSES (themed light/dark):
-  .options + .option — Selectable vertical option cards with .letter (A/B/C badge) and .content
+COMPARISON MODE: Push to slots a/b/c with labels for side-by-side view:
+  brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
+  brainstorm_push_screen({ html: "...", slot: "b", label: "Option B" })
+
+CSS CLASSES (themed light/dark, push fragments not full docs):
+  .options + .option — Selectable cards with .letter (A/B/C) and .content
   .cards + .card — Grid cards with .card-image and .card-body
-  .mockup — Browser-window container with .mockup-header and .mockup-body
-  .split — Two-column 50/50 side-by-side layout
-  .pros-cons — Pros/cons grid with .pros (green) and .cons (red)
-  .placeholder — Dashed placeholder area
-  .mock-nav, .mock-sidebar, .mock-content, .mock-button, .mock-input — UI mockup blocks
-  .subtitle — Muted text below headings
-  .section — Block with top margin spacing
-  .label — Small uppercase badge
+  .mockup — Browser-window container (.mockup-header + .mockup-body)
+  .split — Two-column layout | .pros-cons — Tradeoff grid (.pros/.cons)
+  .mock-nav, .mock-sidebar, .mock-content, .mock-button, .mock-input
 
-MAKING ELEMENTS INTERACTIVE:
-  Add data-choice="value" and onclick="toggleSelect(this)" to any element to capture clicks as events.
-  For multi-select, add data-multiselect to the container.
+INTERACTIVE ELEMENTS:
+  Add data-choice="value" onclick="toggleSelect(this)" to capture clicks.
   Example: <div class="option" data-choice="grid" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>Grid</h3></div></div>
 
-AUTO-DETECTED LIBRARIES (CDN injected automatically):
-  class="mermaid" → Mermaid diagrams (flowchart, sequence, class, state, ER, Gantt, pie)
-  class="language-*" → Prism.js syntax highlighting
-  $$...$$ or class="math" → KaTeX math rendering
+AUTO-DETECTED (CDN injected): class="mermaid" (diagrams), class="language-*" (syntax), $$...$$ (math)
 
-EVENT TYPES returned by brainstorm_read_events:
-  click — User clicked a [data-choice] element. Fields: choice, text, id, timestamp
-  preference — User picked a preferred slot in comparison mode. Fields: choice (slot id), timestamp
-  tab-switch — User switched tabs. Fields: slot, timestamp
-  view-change — User toggled view mode. Fields: mode, timestamp
+EVENTS: click (choice,text), preference (choice), tab-switch (slot), view-change (mode)
 
-WORKFLOW PATTERNS:
-  Single Decision: start → push (options with data-choice) → tell user to select → read_events → use choice → stop
-  A/B/C Comparison: start → push slot a → push slot b → tell user to compare → read_events → look for preference → stop
-  Multi-Round: start → push round 1 → read_events(clear_after_read:true) → clear_screen → push round 2 → read_events → stop
-  Progressive Refinement: start → push v1 → get feedback → push v2 (same browser updates) → iterate → stop
-
-BEST PRACTICES:
-  - ALWAYS pass project_dir (use cwd) to avoid cross-agent conflicts
-  - NEVER restart to update content — just call push_screen again
-  - Push HTML fragments, not full documents
-  - Start with <h2> heading + .subtitle describing the decision
-  - One decision per screen
-  - Tell the user the browser is ready after pushing
+RULES:
+  - NEVER restart to update — just push_screen again
+  - Push HTML fragments, not full <html> documents
+  - Tell user the browser is ready after pushing
   - Give user time before reading events
-  - Always call stop_session when done`,
+  - Always stop_session when done`,
         inputSchema: {
           type: 'object',
           properties: {
-            project_dir: { type: 'string', description: 'Project directory for session storage (ALWAYS pass this — use cwd)' },
+            project_dir: { type: 'string', description: 'Project directory for session storage. Optional — defaults to /tmp/brainstorm-companion/. Pass cwd for project-local storage.' },
             port: { type: 'number', description: 'Port to bind to (default: random ephemeral)' },
-            open_browser: { type: 'boolean', description: 'Whether to open the browser automatically (default: true)' }
+            open_browser: { type: 'boolean', description: 'Open browser automatically (default: true)' },
+            idle_timeout_minutes: { type: 'number', description: 'Auto-stop after N minutes idle (default: 0 = no timeout)' }
           }
         }
       },
@@ -255,7 +242,7 @@ Give the user time to interact before reading — don't read immediately after p
       return { url: this.serverInstance.url, session_dir: this.sessionDir };
     }
 
-    const { project_dir, port = 0, open_browser = true } = args;
+    const { project_dir, port = 0, open_browser = true, idle_timeout_minutes = 0 } = args;
 
     // Determine base directory and create session dir
     const baseDir = project_dir
@@ -271,6 +258,7 @@ Give the user time to interact before reading — don't read immediately after p
       host: '127.0.0.1',
       port: port || 0,
       ownerPid: process.pid,
+      idleTimeoutMs: idle_timeout_minutes > 0 ? idle_timeout_minutes * 60 * 1000 : 0,
       logFn: (...a) => console.error(...a),
     });
 

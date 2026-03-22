@@ -14,30 +14,44 @@ const { SessionManager } = require('./session');
 const HELP = {
   main: `Usage: brainstorm-companion <command> [options]
 
-Opens a browser window for visual brainstorming alongside AI coding sessions.
-Agents push HTML content and users interact visually.
+Visual brainstorming tool. Opens a browser, you push HTML, users interact.
+
+Quickstart (3 commands):
+  brainstorm-companion start
+  brainstorm-companion push --html '<h2>Hello World</h2>'
+  brainstorm-companion stop
+
+How it works:
+  1. "start" opens a browser (reuses existing session if one is running)
+  2. "push" sends HTML to the browser — auto-reloads instantly, every time
+  3. "events" reads what the user clicked (choices, preferences)
+  4. "stop" ends the session
 
 Commands:
-  start    Start the brainstorm server and open browser
-  push     Push HTML content to the browser
-  events   Read user interaction events
+  start    Start server and open browser (or reuse existing session)
+  push     Push HTML content — browser auto-reloads each time
+  events   Read user interaction events (clicks, preferences)
   clear    Clear content or events
-  stop     Stop the server
-  status   Show server status
+  stop     Stop the server and clean up
+  status   Show session info (URL, uptime, slots, events)
 
 Global Options:
-  --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
-  --session <id>        Target a specific session (required for parallel instances)
+  --project-dir <path>  Session storage (default: /tmp/brainstorm-companion/)
+  --session <id>        Target a specific session (for parallel use)
   --mcp                 Run as MCP server (stdio JSON-RPC)
-  --help, -h            Show help (use "<command> --help" for command details)
+  --help, -h            Show help (use "<command> --help" for details)
 
-Examples:
-  brainstorm-companion start
-  brainstorm-companion push --html '<h2>Hello</h2>'
-  brainstorm-companion push mockup.html --slot a --label "Option A"
-  echo '<h2>World</h2>' | brainstorm-companion push -
-  brainstorm-companion events --format json
-  brainstorm-companion stop`,
+Comparison mode (side-by-side with tabs):
+  brainstorm-companion push --html '<h2>A</h2>' --slot a --label "Grid"
+  brainstorm-companion push --html '<h2>B</h2>' --slot b --label "List"
+
+Key concepts:
+  - No setup needed — "start" works with zero arguments
+  - Push HTML fragments (not full documents) — theming is automatic
+  - Use --slot a/b/c + --label for side-by-side comparison
+  - Add data-choice="val" onclick="toggleSelect(this)" for clickable elements
+  - class="mermaid", class="language-*", $$math$$ auto-detected
+  - Sessions persist until stopped — use --timeout <min> for auto-cleanup`,
 
   start: `Usage: brainstorm-companion start [options]
 
@@ -46,12 +60,13 @@ Start the brainstorm server and open a browser window.
 If a session is already running for this project, it reuses it (prints the
 existing URL). Use --new to force a separate session.
 
-Sessions are persistent — they never time out. Stop explicitly with "stop".
+Sessions persist until explicitly stopped — no timeout by default.
 
 Options:
   --project-dir <path>  Session storage location (default: /tmp/brainstorm-companion/)
   --port <number>       Bind to specific port (default: random ephemeral)
   --host <address>      Bind address (default: 127.0.0.1)
+  --timeout <minutes>   Auto-stop after N minutes of inactivity (default: none)
   --foreground          Run server in foreground (don't background)
   --no-open             Don't auto-open browser
   --new                 Force a new session even if one is already running
@@ -62,8 +77,9 @@ Output:
 
 Examples:
   brainstorm-companion start
-  brainstorm-companion start --project-dir ./my-project --no-open
-  brainstorm-companion start --new  # force separate parallel session`,
+  brainstorm-companion start --project-dir .
+  brainstorm-companion start --timeout 30       # auto-stop after 30min idle
+  brainstorm-companion start --new --no-open    # parallel session, no browser`,
 
   push: `Usage: brainstorm-companion push [<file|->] [options]
 
@@ -231,6 +247,7 @@ async function start(argv) {
       'project-dir': { type: 'string' },
       'port':        { type: 'string', default: '0' },
       'host':        { type: 'string', default: '127.0.0.1' },
+      'timeout':     { type: 'string' },
       'foreground':  { type: 'boolean', default: false },
       'no-open':     { type: 'boolean', default: false },
       'new':         { type: 'boolean', default: false },
@@ -241,6 +258,8 @@ async function start(argv) {
   const projectDir = values['project-dir'] || null;
   const host = values['host'];
   const port = parseInt(values['port'], 10) || 0;
+  const timeoutMin = values['timeout'] ? parseInt(values['timeout'], 10) : 0;
+  const idleTimeoutMs = timeoutMin > 0 ? timeoutMin * 60 * 1000 : 0;
   const foreground = values['foreground'];
   const noOpen = values['no-open'];
   const forceNew = values['new'];
@@ -269,6 +288,7 @@ async function start(argv) {
       host,
       port,
       ownerPid: process.pid,
+      idleTimeoutMs,
     });
 
     instance.server.once('listening', () => {
@@ -304,9 +324,7 @@ async function start(argv) {
         BRAINSTORM_DIR: sessionDir,
         BRAINSTORM_HOST: host,
         BRAINSTORM_PORT: String(port),
-        // No BRAINSTORM_OWNER_PID in background mode — the CLI process
-        // exits immediately, so the server must live independently.
-        // No idle timeout — session persists until explicitly stopped.
+        BRAINSTORM_IDLE_TIMEOUT: String(idleTimeoutMs),
       },
     });
     child.unref();
