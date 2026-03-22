@@ -152,9 +152,9 @@ brainstorm_read_events()
 When running multi-round comparisons, clear events between rounds to avoid stale data:
 
 ```
-brainstorm_read_events()           // read current events
-brainstorm_clear_screen({ target: "events" })  // clear event queue
-brainstorm_push_screen({ html: "Round 2..." }) // push next round
+brainstorm_read_events({ clear_after_read: true })  // read and clear in one call
+brainstorm_clear_screen({})                          // clear content for next round
+brainstorm_push_screen({ html: "Round 2..." })       // push next round
 ```
 
 ### Interpreting Events
@@ -250,10 +250,10 @@ stateDiagram-v2
 
 This example shows a full workflow for choosing a navigation pattern for a new app.
 
-### Step 1: Present the question
+### Step 1: Start session and present the question
 
 ```
-brainstorm_start_session()
+brainstorm_start_session()  // no args needed — opens browser automatically
 
 brainstorm_push_screen({
   html: `

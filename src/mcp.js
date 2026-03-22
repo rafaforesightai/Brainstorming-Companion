@@ -1,9 +1,14 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { exec } = require('node:child_process');
 const { startServer } = require('./server');
+
+function cwdHash() {
+  return crypto.createHash('md5').update(process.cwd()).digest('hex').slice(0, 8);
+}
 
 class McpServer {
   constructor() {
@@ -170,7 +175,7 @@ RULES:
         inputSchema: {
           type: 'object',
           properties: {
-            project_dir: { type: 'string', description: 'Project directory for session storage. Optional — defaults to /tmp/brainstorm-companion/. Pass cwd for project-local storage.' },
+            project_dir: { type: 'string', description: 'Optional. Stores session files under <dir>/.superpowers/brainstorm/. If omitted, auto-isolates by working directory.' },
             port: { type: 'number', description: 'Port to bind to (default: random ephemeral)' },
             open_browser: { type: 'boolean', description: 'Open browser automatically (default: true)' },
             idle_timeout_minutes: { type: 'number', description: 'Auto-stop after N minutes idle (default: 0 = no timeout)' }
@@ -247,7 +252,7 @@ Give the user time to interact before reading — don't read immediately after p
     // Determine base directory and create session dir
     const baseDir = project_dir
       ? path.join(project_dir, '.superpowers', 'brainstorm')
-      : '/tmp/brainstorm-companion';
+      : path.join('/tmp', 'brainstorm-companion', cwdHash());
     const sessionId = `${process.pid}-${Date.now()}`;
     const sessionDir = path.join(baseDir, sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });

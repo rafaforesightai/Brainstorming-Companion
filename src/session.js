@@ -1,13 +1,18 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+
+function cwdHash() {
+  return crypto.createHash('md5').update(process.cwd()).digest('hex').slice(0, 8);
+}
 
 class SessionManager {
   constructor(projectDir, targetSessionId) {
     this.baseDir = projectDir
-      ? `${projectDir}/.superpowers/brainstorm/`
-      : `/tmp/brainstorm-companion/`;
+      ? path.join(projectDir, '.superpowers', 'brainstorm')
+      : path.join('/tmp', 'brainstorm-companion', cwdHash());
     this.targetSessionId = targetSessionId || null;
   }
 

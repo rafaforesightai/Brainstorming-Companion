@@ -185,6 +185,18 @@ function printHelp(command) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+function printNextSteps() {
+  console.log(`
+Next steps:
+  brainstorm-companion push --html '<h2>Your content</h2>'   Push content to browser
+  brainstorm-companion push file.html --slot a --label "A"   Comparison mode
+  brainstorm-companion events                                 Read user interactions
+  brainstorm-companion stop                                   Stop when done
+
+Full docs: https://www.npmjs.com/package/brainstorm-companion
+Run: brainstorm-companion push --help    for all CSS classes and options`);
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -272,6 +284,7 @@ async function start(argv) {
     const url = existing.serverInfo.url;
     console.log(`Server already running: ${url}`);
     console.log(`Session ID: ${existing.sessionId}`);
+    printNextSteps();
     if (!noOpen) {
       openBrowser(url);
     }
@@ -294,6 +307,7 @@ async function start(argv) {
     instance.server.once('listening', () => {
       console.log(`Server started: ${instance.url}`);
       console.log(`Session ID: ${path.basename(sessionDir)}`);
+      printNextSteps();
       if (!noOpen) {
         openBrowser(instance.url);
       }
@@ -338,6 +352,7 @@ async function start(argv) {
 
     console.log(`Server started: ${serverInfo.url}`);
     console.log(`Session ID: ${path.basename(sessionDir)}`);
+    printNextSteps();
 
     if (!noOpen) {
       openBrowser(serverInfo.url);

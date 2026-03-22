@@ -53,7 +53,7 @@ brainstorm_start_session({
 })
 ```
 
-**`project_dir` is optional.** Without it, sessions go to `/tmp/brainstorm-companion/`. Pass the current working directory for project-local storage or when multiple agents may run simultaneously.
+**No arguments required.** Sessions are auto-isolated by working directory — different projects never collide, even without `project_dir`. Pass `project_dir` only if you want session files stored inside the project folder.
 
 **Calling it multiple times is safe** — returns the existing session. Just call `brainstorm_push_screen` to update content.
 
@@ -344,7 +344,7 @@ All events include a `timestamp` field (Unix ms).
 ### Single Decision
 
 ```
-1. brainstorm_start_session({ project_dir: "..." })
+1. brainstorm_start_session()
 2. brainstorm_push_screen({ html: "...options with data-choice..." })
 3. → Tell user to make their selection in the browser
 4. brainstorm_read_events({})
@@ -355,7 +355,7 @@ All events include a `timestamp` field (Unix ms).
 ### A/B/C Comparison
 
 ```
-1. brainstorm_start_session({ project_dir: "..." })
+1. brainstorm_start_session()
 2. brainstorm_push_screen({ html: "...", slot: "a", label: "Option A" })
 3. brainstorm_push_screen({ html: "...", slot: "b", label: "Option B" })
 4. → Tell user to compare and pick a preference
@@ -367,7 +367,7 @@ All events include a `timestamp` field (Unix ms).
 ### Multi-Round Brainstorming
 
 ```
-1. brainstorm_start_session({ project_dir: "..." })
+1. brainstorm_start_session()
 
 // Round 1: Layout
 2. brainstorm_push_screen({ html: "...", slot: "a", label: "Grid" })
@@ -390,7 +390,7 @@ All events include a `timestamp` field (Unix ms).
 ### Progressive Refinement
 
 ```
-1. brainstorm_start_session({ project_dir: "..." })
+1. brainstorm_start_session()
 
 // Show initial mockup
 2. brainstorm_push_screen({ html: "...v1 mockup..." })
@@ -407,23 +407,22 @@ All events include a `timestamp` field (Unix ms).
 
 ## Best Practices
 
-1. **Always pass `project_dir`** to `brainstorm_start_session` — avoids cross-agent conflicts
-2. **Never restart to update content** — just call `brainstorm_push_screen` again; the browser auto-reloads
-3. **One `brainstorm_start_session` per workflow** — it reuses the existing session automatically
-4. **Push fragments, not full documents** — the frame template handles `<html>`, theming, and scroll
-5. **Start with a heading** — `<h2>` describes what the user is looking at
-6. **Add a `.subtitle`** — describes the decision being made
-7. **One decision per screen** — don't combine unrelated choices
-8. **Use slot labels** — `label` makes comparison tabs readable
-9. **Use `data-choice` for interaction** — the built-in `toggleSelect` emits events automatically
-10. **Tell the user to interact** — after pushing content, let them know the browser is ready
-11. **Read events after user has time** — don't immediately read; wait for user to respond
-12. **Clean up with `brainstorm_stop_session`** — frees the port and removes temp files
+1. **Zero config** — `brainstorm_start_session()` works with no arguments; isolation is automatic
+3. **Never restart to update content** — just call `brainstorm_push_screen` again; the browser auto-reloads
+4. **One `brainstorm_start_session` per workflow** — it reuses the existing session automatically
+5. **Push fragments, not full documents** — the frame template handles `<html>`, theming, and scroll
+6. **Start with a heading** — `<h2>` describes what the user is looking at
+7. **Add a `.subtitle`** — describes the decision being made
+8. **One decision per screen** — don't combine unrelated choices
+9. **Use slot labels** — `label` makes comparison tabs readable
+10. **Use `data-choice` for interaction** — the built-in `toggleSelect` emits events automatically
+11. **Tell the user to interact** — after pushing content, let them know the browser is ready
+12. **Read events after user has time** — don't immediately read; wait for user to respond
+13. **Clean up with `brainstorm_stop_session`** — or use `idle_timeout_minutes` for auto-cleanup
 
 ## Common Mistakes
 
 - **Starting a new session for each update** — DON'T. Call `push_screen` to update the existing browser.
-- **Omitting `project_dir`** — leads to `/tmp` collisions between agents.
 - **Pushing full HTML documents** — push fragments; the frame template adds theming and structure.
 - **Reading events immediately after push** — give the user time to interact first.
-- **Forgetting to stop** — always call `brainstorm_stop_session` when done.
+- **Forgetting to stop** — always call `brainstorm_stop_session` when done, or use `idle_timeout_minutes`.
