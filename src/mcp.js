@@ -1,14 +1,9 @@
 'use strict';
 
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { exec } = require('node:child_process');
 const { startServer } = require('./server');
-
-function cwdHash() {
-  return crypto.createHash('md5').update(process.cwd()).digest('hex').slice(0, 8);
-}
 
 class McpServer {
   constructor() {
@@ -266,7 +261,7 @@ Use clear_after_read: true between brainstorming rounds to avoid stale events.`,
     // Determine base directory and create session dir
     const baseDir = project_dir
       ? path.join(project_dir, '.superpowers', 'brainstorm')
-      : path.join('/tmp', 'brainstorm-companion', cwdHash());
+      : path.join('/tmp', 'brainstorm-companion');
     const sessionId = `${process.pid}-${Date.now()}`;
     const sessionDir = path.join(baseDir, sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });

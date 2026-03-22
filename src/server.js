@@ -102,6 +102,15 @@ function getActiveSlots(screenDir) {
   } catch { return []; }
 }
 
+function getSlotInfo(screenDir) {
+  return getActiveSlots(screenDir).map(id => {
+    const labelPath = path.join(screenDir, `slot-${id}`, '.label');
+    let label = null;
+    try { label = fs.readFileSync(labelPath, 'utf8').trim(); } catch {}
+    return { id, label };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // startServer — returns synchronously with { server, url, port, broadcast, shutdown }
 // url and port are populated once 'listening' fires (server.address()).
@@ -260,13 +269,7 @@ function startServer(config = {}) {
     }
 
     if (req.method === 'GET' && urlPath === '/api/status') {
-      const slots = getActiveSlots(screenDir);
-      const slotInfo = slots.map(id => {
-        const labelPath = path.join(screenDir, `slot-${id}`, '.label');
-        let label = null;
-        try { label = fs.readFileSync(labelPath, 'utf8').trim(); } catch {}
-        return { id, label };
-      });
+      const slotInfo = getSlotInfo(screenDir);
       const eventsFile = path.join(screenDir, '.events');
       let eventCount = 0;
       try {
@@ -275,7 +278,7 @@ function startServer(config = {}) {
       } catch {}
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        mode: slots.length > 0 ? 'comparison' : 'single',
+        mode: slotInfo.length > 0 ? 'comparison' : 'single',
         slots: slotInfo,
         eventCount,
       }));
@@ -476,8 +479,7 @@ function startServer(config = {}) {
             const slotDir = path.join(screenDir, filename);
             if (fs.existsSync(slotDir)) {
               watchSlotDir(slotId);
-              const activeSlots = getActiveSlots(screenDir);
-              broadcast({ type: 'slots-update', slots: activeSlots });
+              broadcast({ type: 'slots-update', slots: getSlotInfo(screenDir) });
             }
           }, 200);
         }
@@ -532,7 +534,7 @@ function startServer(config = {}) {
       }
     });
     if (changed) {
-      broadcast({ type: 'slots-update', slots: currentSlots });
+      broadcast({ type: 'slots-update', slots: getSlotInfo(screenDir) });
     }
   }, 2000);
   if (slotPollTimer.unref) slotPollTimer.unref();
