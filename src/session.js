@@ -111,6 +111,15 @@ class SessionManager {
         fs.writeFileSync(path.join(slotDir, '.label'), String(label), 'utf8');
       }
     } else {
+      // Single-screen mode: clear any existing slot dirs so server switches out of comparison mode
+      try {
+        const entries = fs.readdirSync(sessionDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && entry.name.startsWith('slot-')) {
+            fs.rmSync(path.join(sessionDir, entry.name), { recursive: true, force: true });
+          }
+        }
+      } catch { /* ignore */ }
       filePath = path.join(sessionDir, filename || `screen-${Date.now()}.html`);
     }
 

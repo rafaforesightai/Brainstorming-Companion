@@ -317,6 +317,15 @@ Use clear_after_read: true between brainstorming rounds to avoid stale events.`,
         fs.writeFileSync(path.join(slotDir, '.label'), String(label), 'utf8');
       }
     } else {
+      // Single-screen mode: clear any existing slot dirs so server doesn't stay in comparison mode
+      try {
+        const entries = fs.readdirSync(this.sessionDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && entry.name.startsWith('slot-')) {
+            fs.rmSync(path.join(this.sessionDir, entry.name), { recursive: true, force: true });
+          }
+        }
+      } catch { /* ignore */ }
       filePath = path.join(this.sessionDir, `screen-${Date.now()}.html`);
     }
 
